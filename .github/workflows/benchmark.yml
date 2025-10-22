@@ -1,0 +1,89 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: # Allow manual runs
+
+jobs:
+  benchmark:
+    name: Run Performance Benchmarks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Orlando for Node.js
+        run: npm run build:nodejs
+
+      - name: Run quick benchmarks
+        run: npm run bench:quick
+
+      - name: Store benchmark results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: benchmarks/
+          retention-days: 30
+
+  benchmark-comment:
+    name: Comment Benchmark Results
+    runs-on: ubuntu-latest
+    needs: benchmark
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Download benchmark results
+        uses: actions/download-artifact@v4
+        with:
+          name: benchmark-results-${{ github.sha }}
+
+      - name: Comment PR with results
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const fs = require('fs');
+            const body = `## 📊 Benchmark Results
+
+            Performance benchmarks have been run for this PR.
+
+            View the full results in the [workflow artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}).
+
+            **Note:** Results from CI may vary from local runs due to shared infrastructure.
+
+            To run benchmarks locally:
+            \`\`\`bash
+            npm run build:nodejs
+            npm run bench:all
+            \`\`\`
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
