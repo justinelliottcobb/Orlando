@@ -1,0 +1,26 @@
+[package]
+name = "orlando-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.orlando]
+path = ".."
+
+[[bin]]
+name = "fuzz_transducer_pipeline"
+path = "fuzz_targets/fuzz_transducer_pipeline.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_collectors"
+path = "fuzz_targets/fuzz_collectors.rs"
+test = false
+doc = false

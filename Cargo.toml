@@ -19,9 +19,13 @@ web-sys = { version = "0.3", features = ["console"] }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
+proptest = "1.4"
+quickcheck = "1.0"
+quickcheck_macros = "1.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 criterion = "0.5"
+proptest = "1.4"
 
 [profile.release]
 opt-level = 3
