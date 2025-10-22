@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orlando Transducers - Basic Example</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 0 20px;
+            line-height: 1.6;
+        }
+        h1 { color: #2c3e50; }
+        h2 { color: #34495e; margin-top: 30px; }
+        .example {
+            background: #f8f9fa;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        pre {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        code {
+            font-family: 'Monaco', 'Menlo', monospace;
+        }
+        .result {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .result strong {
+            color: #155724;
+        }
+    </style>
+</head>
+<body>
+    <h1>🚀 Orlando Transducers - Basic Examples</h1>
+    <p>High-performance compositional data transformations via WebAssembly.</p>
+
+    <div class="example">
+        <h2>Example 1: Basic Pipeline</h2>
+        <p>Transform data with map, filter, and take operations.</p>
+        <div id="example1-result" class="result"></div>
+    </div>
+
+    <div class="example">
+        <h2>Example 2: Early Termination</h2>
+        <p>Process only what's needed - stops after collecting 5 elements.</p>
+        <div id="example2-result" class="result"></div>
+    </div>
+
+    <div class="example">
+        <h2>Example 3: Complex Pipeline</h2>
+        <p>Chain multiple operations in a single pass.</p>
+        <div id="example3-result" class="result"></div>
+    </div>
+
+    <div class="example">
+        <h2>Example 4: Debugging with Tap</h2>
+        <p>Use tap to inspect values without breaking the pipeline.</p>
+        <div id="example4-result" class="result"></div>
+        <pre id="example4-logs"></pre>
+    </div>
+
+    <script type="module">
+        import init, { Pipeline } from '../pkg/orlando.js';
+
+        async function runExamples() {
+            // Initialize WASM module
+            await init();
+
+            // Example 1: Basic Pipeline
+            {
+                const pipeline = new Pipeline()
+                    .map(x => x * 2)
+                    .filter(x => x > 10)
+                    .take(5);
+
+                const data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+                const result = pipeline.toArray(data);
+
+                document.getElementById('example1-result').innerHTML = `
+                    <strong>Input:</strong> ${JSON.stringify(data)}<br>
+                    <strong>Pipeline:</strong> map(x => x * 2) → filter(x => x > 10) → take(5)<br>
+                    <strong>Output:</strong> ${JSON.stringify(result)}
+                `;
+            }
+
+            // Example 2: Early Termination
+            {
+                const pipeline = new Pipeline()
+                    .filter(x => x % 2 === 0)
+                    .take(3);
+
+                // Orlando stops processing after finding 3 even numbers!
+                const data = Array.from({ length: 1000 }, (_, i) => i + 1);
+                const result = pipeline.toArray(data);
+
+                document.getElementById('example2-result').innerHTML = `
+                    <strong>Input:</strong> [1, 2, 3, ..., 1000] (1000 elements)<br>
+                    <strong>Pipeline:</strong> filter(even) → take(3)<br>
+                    <strong>Output:</strong> ${JSON.stringify(result)}<br>
+                    <strong>Note:</strong> Stopped processing after element ${result[result.length - 1] || 0}!
+                `;
+            }
+
+            // Example 3: Complex Pipeline
+            {
+                const pipeline = new Pipeline()
+                    .map(x => x + 1)
+                    .filter(x => x % 2 === 0)
+                    .map(x => x * 3)
+                    .filter(x => x > 10)
+                    .map(x => x - 1)
+                    .take(5);
+
+                const data = Array.from({ length: 100 }, (_, i) => i);
+                const result = pipeline.toArray(data);
+
+                document.getElementById('example3-result').innerHTML = `
+                    <strong>Input:</strong> [0, 1, 2, ..., 99]<br>
+                    <strong>Pipeline:</strong> 5 operations in a single pass<br>
+                    <strong>Output:</strong> ${JSON.stringify(result)}
+                `;
+            }
+
+            // Example 4: Debugging with Tap
+            {
+                const logs = [];
+                const pipeline = new Pipeline()
+                    .tap(x => logs.push(`Input: ${x}`))
+                    .map(x => x * 2)
+                    .tap(x => logs.push(`After map: ${x}`))
+                    .filter(x => x > 5)
+                    .tap(x => logs.push(`After filter: ${x}`));
+
+                const data = [1, 2, 3, 4, 5];
+                const result = pipeline.toArray(data);
+
+                document.getElementById('example4-result').innerHTML = `
+                    <strong>Input:</strong> ${JSON.stringify(data)}<br>
+                    <strong>Output:</strong> ${JSON.stringify(result)}
+                `;
+
+                document.getElementById('example4-logs').textContent =
+                    logs.join('\n');
+            }
+
+            console.log('✅ All examples completed successfully!');
+        }
+
+        runExamples().catch(err => {
+            console.error('❌ Error running examples:', err);
+            document.body.innerHTML += `
+                <div style="background: #f8d7da; color: #721c24; padding: 20px; border-radius: 4px; margin: 20px 0;">
+                    <strong>Error:</strong> ${err.message}<br>
+                    <small>Make sure to build the WASM package first: <code>wasm-pack build --target web</code></small>
+                </div>
+            `;
+        });
+    </script>
+</body>
+</html>

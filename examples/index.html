@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orlando Transducers - Interactive Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            line-height: 1.6;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+        header h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+        header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        .main {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+        }
+        .editor-section {
+            padding: 30px;
+            border-right: 1px solid #e0e0e0;
+        }
+        .output-section {
+            padding: 30px;
+            background: #f8f9fa;
+        }
+        h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+        label {
+            display: block;
+            margin: 15px 0 5px;
+            font-weight: 600;
+            color: #34495e;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 14px;
+        }
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .pipeline-builder {
+            margin: 20px 0;
+        }
+        .operation {
+            background: white;
+            border: 2px solid #667eea;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .operation select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .operation input {
+            flex: 1;
+        }
+        .operation button {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .operation button:hover {
+            background: #c0392b;
+        }
+        button.add-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+            margin: 10px 0;
+        }
+        button.add-btn:hover {
+            background: #5568d3;
+        }
+        button.run-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+            width: 100%;
+            margin: 20px 0;
+        }
+        button.run-btn:hover {
+            background: #218838;
+        }
+        .output {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            min-height: 200px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .stats {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .stats strong {
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            color: #721c24;
+        }
+        .examples {
+            padding: 30px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+        }
+        .example-btn {
+            background: #17a2b8;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .example-btn:hover {
+            background: #138496;
+        }
+        footer {
+            padding: 30px;
+            text-align: center;
+            background: #f8f9fa;
+            border-top: 1px solid #e0e0e0;
+        }
+        footer a {
+            color: #667eea;
+            text-decoration: none;
+            margin: 0 10px;
+        }
+        footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Orlando Transducers</h1>
+            <p>Interactive Demo - Build and Test Pipelines</p>
+        </header>
+
+        <div class="main">
+            <div class="editor-section">
+                <h2>⚙️ Pipeline Builder</h2>
+
+                <label>Input Data (JSON array):</label>
+                <textarea id="inputData" rows="5">[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]</textarea>
+
+                <label>Operations:</label>
+                <div id="operations"></div>
+
+                <button class="add-btn" onclick="addOperation()">+ Add Operation</button>
+                <button class="run-btn" onclick="runPipeline()">▶️ Run Pipeline</button>
+            </div>
+
+            <div class="output-section">
+                <h2>📊 Results</h2>
+
+                <div id="stats"></div>
+                <div id="error"></div>
+
+                <label>Output:</label>
+                <div id="output" class="output">Run the pipeline to see results...</div>
+
+                <label>Pipeline Code:</label>
+                <div id="code" class="output">const pipeline = new Pipeline();</div>
+            </div>
+        </div>
+
+        <div class="examples">
+            <h2>💡 Quick Examples</h2>
+            <button class="example-btn" onclick="loadExample('basic')">Basic: Map & Filter</button>
+            <button class="example-btn" onclick="loadExample('pagination')">Pagination</button>
+            <button class="example-btn" onclick="loadExample('search')">Product Search</button>
+            <button class="example-btn" onclick="loadExample('analytics')">Analytics</button>
+            <button class="example-btn" onclick="loadExample('validation')">Data Validation</button>
+        </div>
+
+        <footer>
+            <p>
+                <a href="basic.html">Basic Examples</a> •
+                <a href="pagination.html">Pagination Demo</a> •
+                <a href="data-processing.html">Data Processing</a> •
+                <a href="performance.html">Performance</a>
+            </p>
+            <p style="margin-top: 10px; color: #7f8c8d;">
+                Orlando - High-performance transducers via WebAssembly
+            </p>
+        </footer>
+    </div>
+
+    <script type="module">
+        import init, { Pipeline } from '../pkg/orlando.js';
+
+        let wasmReady = false;
+        let operationCount = 0;
+
+        await init();
+        wasmReady = true;
+        addOperation(); // Start with one operation
+
+        window.addOperation = function() {
+            const id = operationCount++;
+            const operationsDiv = document.getElementById('operations');
+
+            const div = document.createElement('div');
+            div.className = 'operation';
+            div.id = `op-${id}`;
+            div.innerHTML = `
+                <select id="type-${id}">
+                    <option value="map">map</option>
+                    <option value="filter">filter</option>
+                    <option value="take">take</option>
+                    <option value="takeWhile">takeWhile</option>
+                    <option value="drop">drop</option>
+                    <option value="dropWhile">dropWhile</option>
+                    <option value="tap">tap</option>
+                </select>
+                <input type="text" id="func-${id}" placeholder="e.g., x => x * 2">
+                <button onclick="removeOperation(${id})">✕</button>
+            `;
+
+            operationsDiv.appendChild(div);
+        };
+
+        window.removeOperation = function(id) {
+            const element = document.getElementById(`op-${id}`);
+            if (element) {
+                element.remove();
+            }
+        };
+
+        window.runPipeline = function() {
+            if (!wasmReady) {
+                showError('WASM not ready yet!');
+                return;
+            }
+
+            try {
+                // Clear previous results
+                document.getElementById('error').innerHTML = '';
+                document.getElementById('stats').innerHTML = '';
+
+                // Parse input data
+                const inputText = document.getElementById('inputData').value;
+                const inputData = JSON.parse(inputText);
+
+                if (!Array.isArray(inputData)) {
+                    throw new Error('Input must be a JSON array');
+                }
+
+                // Build pipeline
+                const pipeline = new Pipeline();
+                const codeLines = ['const pipeline = new Pipeline()'];
+
+                const operations = document.querySelectorAll('.operation');
+                operations.forEach((op, idx) => {
+                    const id = op.id.split('-')[1];
+                    const type = document.getElementById(`type-${id}`).value;
+                    const funcText = document.getElementById(`func-${id}`).value;
+
+                    if (!funcText.trim()) return;
+
+                    // Build code representation
+                    codeLines.push(`  .${type}(${funcText})`);
+
+                    // Apply operation
+                    try {
+                        const func = eval(`(${funcText})`);
+
+                        switch(type) {
+                            case 'map':
+                                pipeline.map(func);
+                                break;
+                            case 'filter':
+                                pipeline.filter(func);
+                                break;
+                            case 'take':
+                                pipeline.take(parseInt(funcText));
+                                break;
+                            case 'takeWhile':
+                                pipeline.takeWhile(func);
+                                break;
+                            case 'drop':
+                                pipeline.drop(parseInt(funcText));
+                                break;
+                            case 'dropWhile':
+                                pipeline.dropWhile(func);
+                                break;
+                            case 'tap':
+                                pipeline.tap(func);
+                                break;
+                        }
+                    } catch (e) {
+                        throw new Error(`Operation ${idx + 1} (${type}): ${e.message}`);
+                    }
+                });
+
+                codeLines.push('');
+                codeLines.push(`const result = pipeline.toArray(data);`);
+
+                // Execute pipeline
+                const start = performance.now();
+                const result = pipeline.toArray(inputData);
+                const end = performance.now();
+
+                // Display results
+                document.getElementById('output').textContent = JSON.stringify(result, null, 2);
+                document.getElementById('code').textContent = codeLines.join('\n');
+
+                // Display stats
+                document.getElementById('stats').innerHTML = `
+                    <strong>Input elements:</strong> ${inputData.length}<br>
+                    <strong>Output elements:</strong> ${result.length}<br>
+                    <strong>Execution time:</strong> ${(end - start).toFixed(3)}ms<br>
+                    <strong>Operations:</strong> ${operations.length}
+                `;
+
+            } catch (error) {
+                showError(error.message);
+            }
+        };
+
+        function showError(message) {
+            document.getElementById('error').innerHTML = `
+                <div class="error">
+                    <strong>Error:</strong> ${message}
+                </div>
+            `;
+        }
+
+        window.loadExample = function(example) {
+            // Clear existing operations
+            document.getElementById('operations').innerHTML = '';
+            operationCount = 0;
+
+            switch(example) {
+                case 'basic':
+                    document.getElementById('inputData').value = '[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]';
+                    addOperation();
+                    document.getElementById(`type-0`).value = 'map';
+                    document.getElementById(`func-0`).value = 'x => x * 2';
+                    addOperation();
+                    document.getElementById(`type-1`).value = 'filter';
+                    document.getElementById(`func-1`).value = 'x => x > 10';
+                    addOperation();
+                    document.getElementById(`type-2`).value = 'take';
+                    document.getElementById(`func-2`).value = '5';
+                    break;
+
+                case 'pagination':
+                    document.getElementById('inputData').value = JSON.stringify(
+                        Array.from({ length: 100 }, (_, i) => i + 1)
+                    );
+                    addOperation();
+                    document.getElementById(`type-0`).value = 'drop';
+                    document.getElementById(`func-0`).value = '20';
+                    addOperation();
+                    document.getElementById(`type-1`).value = 'take';
+                    document.getElementById(`func-1`).value = '10';
+                    break;
+
+                case 'search':
+                    document.getElementById('inputData').value = JSON.stringify([
+                        {name: 'Laptop', price: 999, category: 'electronics'},
+                        {name: 'Chair', price: 299, category: 'furniture'},
+                        {name: 'Mouse', price: 29, category: 'electronics'},
+                        {name: 'Desk', price: 499, category: 'furniture'},
+                        {name: 'Keyboard', price: 79, category: 'electronics'},
+                    ]);
+                    addOperation();
+                    document.getElementById(`type-0`).value = 'filter';
+                    document.getElementById(`func-0`).value = 'p => p.category === "electronics"';
+                    addOperation();
+                    document.getElementById(`type-1`).value = 'filter';
+                    document.getElementById(`func-1`).value = 'p => p.price < 500';
+                    addOperation();
+                    document.getElementById(`type-2`).value = 'map';
+                    document.getElementById(`func-2`).value = 'p => p.name';
+                    break;
+
+                case 'analytics':
+                    document.getElementById('inputData').value = JSON.stringify(
+                        Array.from({ length: 1000 }, (_, i) => ({
+                            userId: i % 100,
+                            value: Math.floor(Math.random() * 100),
+                            timestamp: Date.now() - (i * 1000)
+                        }))
+                    );
+                    addOperation();
+                    document.getElementById(`type-0`).value = 'filter';
+                    document.getElementById(`func-0`).value = 'e => e.value > 50';
+                    addOperation();
+                    document.getElementById(`type-1`).value = 'map';
+                    document.getElementById(`func-1`).value = 'e => e.value';
+                    addOperation();
+                    document.getElementById(`type-2`).value = 'take';
+                    document.getElementById(`func-2`).value = '100';
+                    break;
+
+                case 'validation':
+                    document.getElementById('inputData').value = JSON.stringify([
+                        {name: 'Alice', email: 'alice@test.com', age: 25},
+                        {name: '', email: 'invalid', age: 15},
+                        {name: 'Bob', email: 'bob@test.com', age: 30},
+                        {name: 'Charlie', email: 'charlie@test.com', age: 17},
+                    ]);
+                    addOperation();
+                    document.getElementById(`type-0`).value = 'filter';
+                    document.getElementById(`func-0`).value = 'u => u.name.length > 0';
+                    addOperation();
+                    document.getElementById(`type-1`).value = 'filter';
+                    document.getElementById(`func-1`).value = 'u => u.email.includes("@")';
+                    addOperation();
+                    document.getElementById(`type-2`).value = 'filter';
+                    document.getElementById(`func-2`).value = 'u => u.age >= 18';
+                    addOperation();
+                    document.getElementById(`type-3`).value = 'map';
+                    document.getElementById(`func-3`).value = 'u => u.name';
+                    break;
+            }
+
+            runPipeline();
+        };
+    </script>
+</body>
+</html>

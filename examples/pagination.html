@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orlando - Pagination Example</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+        h1 { color: #2c3e50; }
+        .controls {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .controls label {
+            display: inline-block;
+            width: 120px;
+            font-weight: 600;
+        }
+        .controls input {
+            width: 80px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .controls button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        .controls button:hover {
+            background: #2980b9;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #3498db;
+            color: white;
+        }
+        tr:hover {
+            background: #f8f9fa;
+        }
+        .pagination {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        .pagination button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .pagination button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        .stats {
+            background: #d4edda;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .stats strong {
+            color: #155724;
+        }
+        code {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>📄 Pagination with Orlando Transducers</h1>
+    <p>Efficient pagination using <code>drop</code> and <code>take</code> operations.</p>
+
+    <div class="controls">
+        <label>Page Size:</label>
+        <input type="number" id="pageSize" value="10" min="1" max="100">
+        <button onclick="updatePageSize()">Apply</button>
+    </div>
+
+    <div class="pagination">
+        <button id="prevBtn" onclick="prevPage()">← Previous</button>
+        <span id="pageInfo">Page 1</span>
+        <button id="nextBtn" onclick="nextPage()">Next →</button>
+    </div>
+
+    <table id="dataTable">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Department</th>
+                <th>Active</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody">
+        </tbody>
+    </table>
+
+    <div class="stats" id="stats"></div>
+
+    <script type="module">
+        import init, { Pipeline } from '../pkg/orlando.js';
+
+        let currentPage = 1;
+        let pageSize = 10;
+        let data = [];
+
+        // Generate sample data
+        function generateUsers(count) {
+            const departments = ['Engineering', 'Marketing', 'Sales', 'HR', 'Finance'];
+            const firstNames = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Henry'];
+            const lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Davis', 'Miller', 'Wilson', 'Moore'];
+
+            return Array.from({ length: count }, (_, i) => ({
+                id: i + 1,
+                name: `${firstNames[i % firstNames.length]} ${lastNames[i % lastNames.length]}`,
+                email: `user${i + 1}@company.com`,
+                department: departments[i % departments.length],
+                active: Math.random() > 0.2
+            }));
+        }
+
+        // Paginate using Orlando pipeline
+        function paginate(data, page, pageSize) {
+            const pipeline = new Pipeline()
+                .drop((page - 1) * pageSize)
+                .take(pageSize);
+
+            return pipeline.toArray(data);
+        }
+
+        function renderTable(pageData) {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = pageData.map(user => `
+                <tr>
+                    <td>${user.id}</td>
+                    <td>${user.name}</td>
+                    <td>${user.email}</td>
+                    <td>${user.department}</td>
+                    <td>${user.active ? '✅' : '❌'}</td>
+                </tr>
+            `).join('');
+        }
+
+        function updateStats(pageData, totalItems) {
+            const start = (currentPage - 1) * pageSize + 1;
+            const end = Math.min(start + pageData.length - 1, totalItems);
+            const totalPages = Math.ceil(totalItems / pageSize);
+
+            document.getElementById('stats').innerHTML = `
+                <strong>Showing:</strong> ${start}-${end} of ${totalItems} users<br>
+                <strong>Page:</strong> ${currentPage} of ${totalPages}<br>
+                <strong>Performance:</strong> Orlando only processes ${pageData.length} items per page using early termination!
+            `;
+        }
+
+        function updatePagination() {
+            const totalPages = Math.ceil(data.length / pageSize);
+            const pageData = paginate(data, currentPage, pageSize);
+
+            renderTable(pageData);
+            updateStats(pageData, data.length);
+
+            document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
+            document.getElementById('prevBtn').disabled = currentPage === 1;
+            document.getElementById('nextBtn').disabled = currentPage >= totalPages;
+        }
+
+        window.prevPage = function() {
+            if (currentPage > 1) {
+                currentPage--;
+                updatePagination();
+            }
+        };
+
+        window.nextPage = function() {
+            const totalPages = Math.ceil(data.length / pageSize);
+            if (currentPage < totalPages) {
+                currentPage++;
+                updatePagination();
+            }
+        };
+
+        window.updatePageSize = function() {
+            const newSize = parseInt(document.getElementById('pageSize').value);
+            if (newSize > 0 && newSize <= 100) {
+                pageSize = newSize;
+                currentPage = 1;
+                updatePagination();
+            }
+        };
+
+        async function init_app() {
+            // Initialize WASM
+            await init();
+
+            // Generate sample data
+            data = generateUsers(1000);
+
+            // Render initial page
+            updatePagination();
+
+            console.log('✅ Pagination example ready!');
+        }
+
+        init_app().catch(err => {
+            console.error('❌ Error:', err);
+            document.body.innerHTML += `
+                <div style="background: #f8d7da; color: #721c24; padding: 20px; border-radius: 4px; margin: 20px 0;">
+                    <strong>Error:</strong> ${err.message}<br>
+                    <small>Make sure to build the WASM package first: <code>wasm-pack build --target web</code></small>
+                </div>
+            `;
+        });
+    </script>
+</body>
+</html>

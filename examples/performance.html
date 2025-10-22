@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orlando - Performance Comparison</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 1000px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+        h1 { color: #2c3e50; }
+        h2 { color: #34495e; margin-top: 30px; }
+        .benchmark {
+            background: #f8f9fa;
+            border-left: 4px solid #3498db;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .results {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .metric {
+            background: white;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        .metric.winner {
+            background: #d4edda;
+            border-color: #28a745;
+        }
+        .metric h3 {
+            margin: 0 0 10px 0;
+            color: #2c3e50;
+            font-size: 16px;
+        }
+        .metric .time {
+            font-size: 28px;
+            font-weight: bold;
+            color: #3498db;
+        }
+        .metric.winner .time {
+            color: #28a745;
+        }
+        .metric .label {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        .info {
+            background: #d1ecf1;
+            border-left: 4px solid #17a2b8;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .speedup {
+            font-size: 24px;
+            font-weight: bold;
+            color: #28a745;
+            text-align: center;
+            padding: 20px;
+            background: #d4edda;
+            border-radius: 4px;
+            margin: 15px 0;
+        }
+        pre {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <h1>⚡ Performance Comparison</h1>
+    <p>Compare Orlando transducers against native JavaScript array methods.</p>
+
+    <div class="info">
+        <strong>Note:</strong> These benchmarks run in your browser. Results may vary based on your hardware and browser.
+        Each test runs multiple iterations and reports the average time.
+    </div>
+
+    <div class="benchmark">
+        <h2>Benchmark 1: Map → Filter → Take</h2>
+        <p>Process 100,000 numbers: double them, filter evens, take first 10.</p>
+        <button onclick="runBenchmark1()" id="btn1">Run Benchmark</button>
+        <div id="results1"></div>
+    </div>
+
+    <div class="benchmark">
+        <h2>Benchmark 2: Complex Pipeline (10 operations)</h2>
+        <p>Chain 10 operations on 50,000 elements to test composition efficiency.</p>
+        <button onclick="runBenchmark2()" id="btn2">Run Benchmark</button>
+        <div id="results2"></div>
+    </div>
+
+    <div class="benchmark">
+        <h2>Benchmark 3: Early Termination</h2>
+        <p>Find first 5 items matching a condition in 1,000,000 elements.</p>
+        <button onclick="runBenchmark3()" id="btn3">Run Benchmark</button>
+        <div id="results3"></div>
+    </div>
+
+    <div class="benchmark">
+        <h2>Benchmark 4: Large Dataset Processing</h2>
+        <p>Filter and transform 500,000 elements with multiple conditions.</p>
+        <button onclick="runBenchmark4()" id="btn4">Run Benchmark</button>
+        <div id="results4"></div>
+    </div>
+
+    <script type="module">
+        import init, { Pipeline } from '../pkg/orlando.js';
+
+        let wasmReady = false;
+
+        function benchmark(name, fn, iterations = 10) {
+            const times = [];
+
+            // Warm-up
+            for (let i = 0; i < 3; i++) {
+                fn();
+            }
+
+            // Actual benchmark
+            for (let i = 0; i < iterations; i++) {
+                const start = performance.now();
+                fn();
+                const end = performance.now();
+                times.push(end - start);
+            }
+
+            const avg = times.reduce((a, b) => a + b, 0) / times.length;
+            const min = Math.min(...times);
+            const max = Math.max(...times);
+
+            return { avg, min, max, times };
+        }
+
+        function displayResults(containerId, orlandoTime, nativeTime) {
+            const speedup = (nativeTime.avg / orlandoTime.avg).toFixed(2);
+            const orlandoWins = orlandoTime.avg < nativeTime.avg;
+
+            const html = `
+                <div class="results">
+                    <div class="metric ${orlandoWins ? 'winner' : ''}">
+                        <h3>🚀 Orlando Transducers</h3>
+                        <div class="time">${orlandoTime.avg.toFixed(2)}ms</div>
+                        <div class="label">Average time</div>
+                    </div>
+                    <div class="metric ${!orlandoWins ? 'winner' : ''}">
+                        <h3>📊 JavaScript Arrays</h3>
+                        <div class="time">${nativeTime.avg.toFixed(2)}ms</div>
+                        <div class="label">Average time</div>
+                    </div>
+                </div>
+                <div class="speedup">
+                    ${orlandoWins
+                        ? `Orlando is ${speedup}x faster! 🎉`
+                        : `JavaScript is ${(1/speedup).toFixed(2)}x faster`
+                    }
+                </div>
+                <pre>Orlando: min=${orlandoTime.min.toFixed(2)}ms, max=${orlandoTime.max.toFixed(2)}ms
+Native:  min=${nativeTime.min.toFixed(2)}ms, max=${nativeTime.max.toFixed(2)}ms</pre>
+            `;
+
+            document.getElementById(containerId).innerHTML = html;
+        }
+
+        window.runBenchmark1 = function() {
+            if (!wasmReady) {
+                alert('WASM not ready yet! Please wait...');
+                return;
+            }
+
+            const btn = document.getElementById('btn1');
+            btn.disabled = true;
+            btn.textContent = 'Running...';
+
+            setTimeout(() => {
+                const data = Array.from({ length: 100000 }, (_, i) => i + 1);
+
+                const orlandoTime = benchmark('Orlando', () => {
+                    const pipeline = new Pipeline()
+                        .map(x => x * 2)
+                        .filter(x => x % 2 === 0)
+                        .take(10);
+                    return pipeline.toArray(data);
+                });
+
+                const nativeTime = benchmark('Native', () => {
+                    return data
+                        .map(x => x * 2)
+                        .filter(x => x % 2 === 0)
+                        .slice(0, 10);
+                });
+
+                displayResults('results1', orlandoTime, nativeTime);
+                btn.disabled = false;
+                btn.textContent = 'Run Again';
+            }, 100);
+        };
+
+        window.runBenchmark2 = function() {
+            if (!wasmReady) {
+                alert('WASM not ready yet! Please wait...');
+                return;
+            }
+
+            const btn = document.getElementById('btn2');
+            btn.disabled = true;
+            btn.textContent = 'Running...';
+
+            setTimeout(() => {
+                const data = Array.from({ length: 50000 }, (_, i) => i + 1);
+
+                const orlandoTime = benchmark('Orlando', () => {
+                    const pipeline = new Pipeline()
+                        .map(x => x + 1)
+                        .filter(x => x % 2 === 0)
+                        .map(x => x * 3)
+                        .filter(x => x > 10)
+                        .map(x => x / 2)
+                        .filter(x => x % 5 === 0)
+                        .map(x => x - 1)
+                        .filter(x => x < 10000)
+                        .map(x => x * 2)
+                        .take(100);
+                    return pipeline.toArray(data);
+                });
+
+                const nativeTime = benchmark('Native', () => {
+                    return data
+                        .map(x => x + 1)
+                        .filter(x => x % 2 === 0)
+                        .map(x => x * 3)
+                        .filter(x => x > 10)
+                        .map(x => x / 2)
+                        .filter(x => x % 5 === 0)
+                        .map(x => x - 1)
+                        .filter(x => x < 10000)
+                        .map(x => x * 2)
+                        .slice(0, 100);
+                });
+
+                displayResults('results2', orlandoTime, nativeTime);
+                btn.disabled = false;
+                btn.textContent = 'Run Again';
+            }, 100);
+        };
+
+        window.runBenchmark3 = function() {
+            if (!wasmReady) {
+                alert('WASM not ready yet! Please wait...');
+                return;
+            }
+
+            const btn = document.getElementById('btn3');
+            btn.disabled = true;
+            btn.textContent = 'Running...';
+
+            setTimeout(() => {
+                const data = Array.from({ length: 1000000 }, (_, i) => i + 1);
+
+                const orlandoTime = benchmark('Orlando', () => {
+                    const pipeline = new Pipeline()
+                        .filter(x => x % 137 === 0)
+                        .take(5);
+                    return pipeline.toArray(data);
+                }, 5);
+
+                const nativeTime = benchmark('Native', () => {
+                    return data
+                        .filter(x => x % 137 === 0)
+                        .slice(0, 5);
+                }, 5);
+
+                displayResults('results3', orlandoTime, nativeTime);
+                btn.disabled = false;
+                btn.textContent = 'Run Again';
+            }, 100);
+        };
+
+        window.runBenchmark4 = function() {
+            if (!wasmReady) {
+                alert('WASM not ready yet! Please wait...');
+                return;
+            }
+
+            const btn = document.getElementById('btn4');
+            btn.disabled = true;
+            btn.textContent = 'Running...';
+
+            setTimeout(() => {
+                const data = Array.from({ length: 500000 }, (_, i) => ({
+                    id: i,
+                    value: Math.random() * 1000,
+                    active: Math.random() > 0.5
+                }));
+
+                const orlandoTime = benchmark('Orlando', () => {
+                    const pipeline = new Pipeline()
+                        .filter(item => item.active)
+                        .filter(item => item.value > 100)
+                        .map(item => ({
+                            id: item.id,
+                            score: item.value * 2
+                        }))
+                        .filter(item => item.score < 1500)
+                        .take(1000);
+                    return pipeline.toArray(data);
+                }, 5);
+
+                const nativeTime = benchmark('Native', () => {
+                    return data
+                        .filter(item => item.active)
+                        .filter(item => item.value > 100)
+                        .map(item => ({
+                            id: item.id,
+                            score: item.value * 2
+                        }))
+                        .filter(item => item.score < 1500)
+                        .slice(0, 1000);
+                }, 5);
+
+                displayResults('results4', orlandoTime, nativeTime);
+                btn.disabled = false;
+                btn.textContent = 'Run Again';
+            }, 100);
+        };
+
+        async function initApp() {
+            await init();
+            wasmReady = true;
+            console.log('✅ WASM ready! You can now run benchmarks.');
+        }
+
+        initApp().catch(err => {
+            console.error('❌ Error:', err);
+            document.body.innerHTML += `
+                <div style="background: #f8d7da; color: #721c24; padding: 20px; border-radius: 4px; margin: 20px;">
+                    <strong>Error:</strong> ${err.message}<br>
+                    <small>Build WASM first: <code>wasm-pack build --target web</code></small>
+                </div>
+            `;
+        });
+    </script>
+</body>
+</html>

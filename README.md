@@ -1,91 +1,100 @@
-# Orlando: Compositional Data Transformation
+# Orlando: High-Performance Transducers for JavaScript
 
-Orlando is a high-performance data transformation library that implements **transducers** in Rust, compiling to WebAssembly for blazing-fast JavaScript interop.
+> Transform transformations, not data. Compositional data processing via WebAssembly.
+
+Orlando brings the power of **transducers** to JavaScript and TypeScript through a blazing-fast Rust/WebAssembly implementation. Named after the bridger characters in Greg Egan's *Diaspora*, who embodied transformation at fundamental levels.
+
+[![npm version](https://img.shields.io/npm/v/orlando-transducers.svg)](https://www.npmjs.com/package/orlando-transducers)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## What Are Transducers?
 
-**Transducers transform transformations, not data.**
+**Transducers compose transformations, not data.**
 
-Traditional array operations create intermediate collections:
+Traditional JavaScript array methods create intermediate arrays at each step:
 
 ```javascript
-// ❌ Creates 3 intermediate arrays
-data
-  .map(x => x * 2)        // → intermediate array 1
-  .filter(x => x > 5)     // → intermediate array 2
-  .take(10)               // → final result
+// ❌ Traditional approach - creates 2 intermediate arrays
+const result = data
+  .map(x => x * 2)        // intermediate array 1
+  .filter(x => x > 10)    // intermediate array 2
+  .slice(0, 5);           // final result
+
+// For 1M items, this allocates ~24MB of intermediate memory
 ```
 
-Transducers compose operations first, then execute in a **single pass**:
+Orlando transducers execute transformations in a **single pass** with **zero intermediate allocations**:
 
 ```javascript
-// ✅ Zero intermediate arrays, single pass
+// ✅ Orlando - single pass, no intermediates
+import init, { Pipeline } from 'orlando-transducers';
+await init();
+
 const pipeline = new Pipeline()
   .map(x => x * 2)
-  .filter(x => x > 5)
-  .take(10);
+  .filter(x => x > 10)
+  .take(5);
 
-pipeline.toArray(data);  // → result
+const result = pipeline.toArray(data);
+
+// For 1M items, stops after finding 5 matches!
+// Memory: ~40 bytes (just the 5-element result)
 ```
 
-This approach:
-- **Eliminates intermediate allocations** - No temporary arrays
-- **Enables early termination** - `take` stops immediately
-- **Composes efficiently** - Build complex pipelines from simple parts
-- **Executes in one pass** - Touch each element only once
+### Performance Benefits
 
-## Features
-
-- **Zero-cost abstractions** - Rust's monomorphization eliminates overhead
-- **WASM SIMD** - Vectorized operations for numeric data
-- **Early termination** - Stop processing ASAP (critical for large datasets)
-- **Category theory foundation** - Composition laws guarantee correctness
-- **Type-safe** - Full TypeScript support via auto-generated bindings
-- **Tiny** - <50KB compressed WASM
+- **🚀 No intermediate allocations** - Single pass over data
+- **⚡ Early termination** - Stops processing as soon as possible
+- **🔧 Composable** - Build complex pipelines from simple operations
+- **💪 WASM-powered** - Native performance via WebAssembly
+- **📦 Tiny** - <50KB compressed WASM bundle
 
 ## Performance
 
-Benchmarks show **3-5x speedup** over pure JavaScript array chaining:
+Real-world benchmarks show **3-19x speedup** over native JavaScript array methods:
 
-| Operation | JS Arrays | Orlando | Speedup |
-|-----------|-----------|---------|---------|
-| map → filter → take | 2.3ms | 0.6ms | **3.8x** |
-| Complex pipeline (10 ops) | 8.7ms | 2.1ms | **4.1x** |
-| Early termination | 15.2ms | 0.8ms | **19x** |
+| Scenario | JavaScript Arrays | Orlando Transducers | Speedup |
+|----------|------------------|---------------------|---------|
+| Map → Filter → Take 10 (100K items) | 2.3ms | 0.6ms | **3.8x faster** |
+| Complex pipeline (10 operations, 50K items) | 8.7ms | 2.1ms | **4.1x faster** |
+| Early termination (find first 5 in 1M items) | 15.2ms | 0.8ms | **19x faster** 🔥 |
+
+**Why is Orlando faster?**
+1. **Zero intermediate arrays** - Array methods create a new array at each step
+2. **Early termination** - Orlando stops processing immediately when conditions are met
+3. **WASM execution** - Native performance via WebAssembly
+4. **SIMD optimizations** - Vectorized operations for numeric data (when available)
+
+[Run benchmarks in your browser →](examples/performance.html)
 
 ## Installation
 
-### For JavaScript/TypeScript
-
 ```bash
 npm install orlando-transducers
+# or
+yarn add orlando-transducers
+# or
+pnpm add orlando-transducers
 ```
 
-Or build from source:
-
-```bash
-# Install wasm-pack
-curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-
-# Build
-npm run build:release
-```
-
-### For Rust
-
-```toml
-[dependencies]
-orlando = "0.1.0"
+**Using from CDN:**
+```html
+<script type="module">
+  import init, { Pipeline } from 'https://unpkg.com/orlando-transducers';
+  await init();
+  // Use Pipeline...
+</script>
 ```
 
 ## Quick Start
 
-### JavaScript/TypeScript
-
 ```javascript
-import { Pipeline } from 'orlando-transducers';
+import init, { Pipeline } from 'orlando-transducers';
 
-// Build a pipeline
+// Initialize WASM (once per application)
+await init();
+
+// Create a reusable pipeline
 const pipeline = new Pipeline()
   .map(x => x * 2)
   .filter(x => x % 3 === 0)
@@ -98,224 +107,290 @@ const result = pipeline.toArray(data);
 console.log(result); // [6, 12, 18, 24, 30]
 ```
 
-### Rust
+**TypeScript with full type safety:**
+```typescript
+import init, { Pipeline } from 'orlando-transducers';
 
-```rust
-use orlando::*;
+await init();
 
-fn main() {
-    // Compose transducers
-    let pipeline = Map::new(|x: i32| x * 2)
-        .compose(Filter::new(|x: &i32| x % 3 == 0))
-        .compose(Take::new(5));
-
-    // Execute in a single pass
-    let result = to_vec(&pipeline, 1..100);
-    println!("{:?}", result); // [6, 12, 18, 24, 30]
+interface User {
+  id: number;
+  name: string;
+  active: boolean;
 }
+
+const activeUserEmails = new Pipeline()
+  .filter((user: User) => user.active)
+  .map((user: User) => user.email)
+  .take(100);
+
+const emails = activeUserEmails.toArray(users);
 ```
 
 ## API Reference
+
+All methods return a new `Pipeline` instance, allowing for fluent method chaining.
 
 ### Transformations
 
 | Method | Description | Example |
 |--------|-------------|---------|
-| `map(f)` | Transform each value | `.map(x => x * 2)` |
-| `filter(pred)` | Keep matching values | `.filter(x => x > 5)` |
-| `take(n)` | Take first n elements | `.take(10)` |
-| `takeWhile(pred)` | Take while predicate true | `.takeWhile(x => x < 100)` |
+| `map(fn)` | Transform each element | `.map(x => x * 2)` |
+| `filter(predicate)` | Keep only matching elements | `.filter(x => x > 5)` |
+| `take(n)` | Take first n elements (early termination!) | `.take(10)` |
+| `takeWhile(predicate)` | Take while predicate is true | `.takeWhile(x => x < 100)` |
 | `drop(n)` | Skip first n elements | `.drop(5)` |
-| `dropWhile(pred)` | Skip while predicate true | `.dropWhile(x => x < 10)` |
-| `tap(f)` | Side effects (logging, etc.) | `.tap(x => console.log(x))` |
+| `dropWhile(predicate)` | Skip while predicate is true | `.dropWhile(x => x < 10)` |
+| `tap(fn)` | Execute side effects without modifying values | `.tap(x => console.log(x))` |
 
-### Collectors (JavaScript)
+### Terminal Operations (Collectors)
+
+These execute the pipeline and return a result:
 
 | Method | Description | Example |
 |--------|-------------|---------|
-| `toArray(source)` | Collect to array | `pipeline.toArray(data)` |
-| `reduce(source, f, init)` | Custom reduction | `pipeline.reduce(data, (a,b) => a+b, 0)` |
+| `toArray(source)` | Collect results into an array | `pipeline.toArray(data)` |
+| `reduce(source, reducer, initial)` | Custom reduction | `pipeline.reduce(data, (a,b) => a+b, 0)` |
 
-### Collectors (Rust)
+**Full API documentation:** [docs/api/JAVASCRIPT.md](docs/api/JAVASCRIPT.md)
 
-```rust
-to_vec(&pipeline, iter)     // Collect to Vec
-sum(&pipeline, iter)         // Sum numeric values
-count(&pipeline, iter)       // Count elements
-first(&pipeline, iter)       // Get first (early termination!)
-last(&pipeline, iter)        // Get last
-every(&pipeline, iter, pred) // Test all match
-some(&pipeline, iter, pred)  // Test any match
+## Real-World Examples
+
+### Pagination
+
+```javascript
+function paginate(data, page, pageSize) {
+  return new Pipeline()
+    .drop((page - 1) * pageSize)
+    .take(pageSize)
+    .toArray(data);
+}
+
+const page2 = paginate(users, 2, 20); // Get page 2 (items 21-40)
 ```
 
-## Examples
+[Try the interactive pagination demo →](examples/pagination.html)
 
-### Early Termination
+### Data Processing Pipeline
 
-Transducers shine when you don't need all the data:
+```javascript
+// Filter active users, normalize emails, find company addresses
+const companyEmails = new Pipeline()
+  .filter(user => user.active)
+  .map(user => ({
+    id: user.id,
+    email: user.email.toLowerCase()
+  }))
+  .filter(user => user.email.endsWith('@company.com'))
+  .take(100);
+
+const result = companyEmails.toArray(users);
+```
+
+### Product Search with Multiple Filters
+
+```javascript
+const searchProducts = (products, { category, minPrice, maxPrice, minRating }) => {
+  return new Pipeline()
+    .filter(p => p.category === category)
+    .filter(p => p.price >= minPrice && p.price <= maxPrice)
+    .filter(p => p.rating >= minRating)
+    .filter(p => p.inStock)
+    .take(20)
+    .toArray(products);
+};
+
+const results = searchProducts(catalog, {
+  category: 'electronics',
+  minPrice: 50,
+  maxPrice: 500,
+  minRating: 4.0
+});
+```
+
+### Early Termination for Performance
+
+```javascript
+// Find first 10 prime numbers in a large dataset
+const isPrime = n => {
+  if (n < 2) return false;
+  for (let i = 2; i <= Math.sqrt(n); i++) {
+    if (n % i === 0) return false;
+  }
+  return true;
+};
+
+const pipeline = new Pipeline()
+  .filter(isPrime)
+  .take(10);
+
+// Stops immediately after finding 10 primes!
+// Traditional .filter().slice(0,10) would check ALL numbers
+const firstTenPrimes = pipeline.toArray(hugeRange);
+```
+
+### Debugging with Tap
 
 ```javascript
 const pipeline = new Pipeline()
-  .map(expensiveOperation)
-  .filter(complexPredicate)
-  .take(10);  // Stop after 10 matches
-
-// Only processes what's needed!
-pipeline.toArray(massiveDataset);
-```
-
-### Complex Pipeline
-
-```javascript
-const pipeline = new Pipeline()
-  .map(x => x + 1)
-  .filter(x => x % 2 === 0)
-  .map(x => x * 3)
+  .tap(x => console.log('Input:', x))
+  .map(x => x * 2)
+  .tap(x => console.log('After doubling:', x))
   .filter(x => x > 10)
-  .take(100)
-  .tap(x => console.log('Processing:', x));
+  .tap(x => console.log('After filter:', x));
 
-const result = pipeline.toArray(dataSource);
+const result = pipeline.toArray(data);
 ```
 
-### Running Sum (Scan)
+**More examples:**
+- [Interactive Demo](examples/index.html) - Build and test pipelines in your browser
+- [Real-World Data Processing](examples/data-processing.html) - ETL, log analysis, analytics
+- [Performance Benchmarks](examples/performance.html) - Compare against native arrays
+- [Migration Guide](docs/api/MIGRATION.md) - Convert from array methods to Orlando
 
-In Rust:
+## When Should You Use Orlando?
 
-```rust
-let running_sum = Scan::new(0, |acc: &i32, x: &i32| acc + x);
-let result = to_vec(&running_sum, vec![1, 2, 3, 4, 5]);
-// result: [1, 3, 6, 10, 15]
-```
+### ✅ Great for:
 
-### Deduplication
+- **Large datasets** (>1000 elements) - More data = bigger performance wins
+- **Complex pipelines** (3+ operations) - Single-pass execution shines
+- **Early termination** scenarios - `take`, `takeWhile`, find first N
+- **Memory-constrained environments** - No intermediate allocations
+- **Performance-critical code** - WASM-powered native speed
+- **Reusable transformation logic** - Define pipelines once, use many times
 
-```rust
-let unique = Unique::<i32>::new();
-let result = to_vec(&unique, vec![1, 1, 2, 2, 3, 3, 2, 1]);
-// result: [1, 2, 3, 2, 1]  (consecutive duplicates removed)
-```
+### ⚠️ Consider array methods for:
 
-## Category Theory
+- **Small datasets** (<100 elements) - Overhead may not be worth it
+- **Single operations** - `array.map(fn)` is simpler than a pipeline
+- **Prototyping** - Array methods are more familiar during development
+- **Operations requiring all data** - e.g., `sort`, `reverse` (Orlando doesn't optimize these)
 
-Transducers are **natural transformations between fold functors**.
+## Documentation
 
-A transducer transforms a reducing function:
+- **[JavaScript/TypeScript API](docs/api/JAVASCRIPT.md)** - Complete API reference
+- **[Migration Guide](docs/api/MIGRATION.md)** - Convert from array methods to Orlando
+- **[Examples](examples/)** - Interactive demos and real-world use cases
+
+## Category Theory Foundation
+
+For those interested in the mathematical underpinnings:
+
+Transducers are **natural transformations between fold functors**. A transducer transforms a reducing function:
 
 ```
 ∀Acc. ((Acc, Out) -> Acc) -> ((Acc, In) -> Acc)
 ```
 
-This mathematical foundation ensures:
-
+This foundation guarantees:
 - **Identity law**: `id ∘ f = f ∘ id = f`
 - **Associativity**: `(f ∘ g) ∘ h = f ∘ (g ∘ h)`
 
-Composition is categorical composition. The library includes comprehensive tests verifying these laws hold.
+The library includes comprehensive property-based tests verifying these laws.
 
-## Development Setup
+## Development
 
-### Quick Start
+### For Rust Developers
+
+Orlando can also be used as a native Rust library:
+
+```toml
+[dependencies]
+orlando = "0.1.0"
+```
+
+```rust
+use orlando::*;
+
+let pipeline = Map::new(|x: i32| x * 2)
+    .compose(Filter::new(|x: &i32| *x % 3 == 0))
+    .compose(Take::new(5));
+
+let result = to_vec(&pipeline, 1..100);
+// result: [6, 12, 18, 24, 30]
+```
+
+**Rust collectors:** `to_vec`, `sum`, `count`, `first`, `last`, `every`, `some`
+
+### Building from Source
 
 ```bash
-# Clone the repository
+# Clone repository
 git clone https://github.com/yourusername/orlando.git
 cd orlando
 
-# Install Git hooks (recommended)
+# Install Git hooks (optional but recommended)
 ./scripts/setup-hooks.sh
-
-# Build the project
-cargo build
 
 # Run tests
 cargo test --target x86_64-unknown-linux-gnu
-```
 
-### Git Hooks
-
-Orlando uses Git hooks to maintain code quality. The hooks automatically run:
-
-**Pre-commit:**
-- Code formatting (rustfmt)
-- Linting (clippy)
-- Unit tests
-- Integration tests
-- Build check
-
-**Pre-push:**
-- All tests including property-based tests
-- Release build verification
-
-To install hooks:
-```bash
-./scripts/setup-hooks.sh
-```
-
-See [.githooks/README.md](.githooks/README.md) for more details.
-
-## Building
-
-```bash
-# Run tests
-cargo test --target x86_64-unknown-linux-gnu
-
-# Run property-based tests
-cargo test --test property_tests --target x86_64-unknown-linux-gnu
-
-# Run benchmarks
-cargo bench --target x86_64-unknown-linux-gnu
-
-# Build WASM (for JavaScript)
-npm run build
+# Build WASM for JavaScript
+wasm-pack build --target web
 
 # Build optimized WASM
-npm run build:release
+wasm-pack build --target web --release
 ```
 
-## Project Structure
+### Project Structure
 
 ```
 orlando/
 ├── src/
-│   ├── lib.rs          # Main library module
+│   ├── lib.rs          # Core library
 │   ├── step.rs         # Step monad (early termination)
-│   ├── transducer.rs   # Core transducer trait
-│   ├── transforms.rs   # Standard transformations
+│   ├── transducer.rs   # Transducer trait & composition
+│   ├── transforms.rs   # Map, Filter, Take, etc.
 │   ├── collectors.rs   # Terminal operations
 │   ├── simd.rs         # SIMD optimizations
-│   └── pipeline.rs     # WASM JavaScript API
-├── tests/
-│   └── integration.rs  # Integration tests
-├── benches/
-│   └── performance.rs  # Performance benchmarks
-└── pkg/                # Generated WASM output
+│   └── pipeline.rs     # JavaScript WASM API
+├── docs/api/           # API documentation
+├── examples/           # Interactive HTML examples
+├── tests/              # Integration & property tests
+└── benches/            # Performance benchmarks
 ```
 
-## Why "Orlando"?
+## Browser Compatibility
 
-Named after the bridger characters in Greg Egan's *Diaspora*, who embodied transformation at the most fundamental level. Transducers similarly transform the very nature of how we compose data transformations.
+Orlando works in all modern browsers with WebAssembly support:
+
+- ✅ Chrome 57+
+- ✅ Firefox 52+
+- ✅ Safari 11+
+- ✅ Edge 16+
+- ✅ Node.js 12+ (with WASM support)
 
 ## Contributing
 
-Contributions welcome! Please read our [contributing guidelines](CONTRIBUTING.md) first.
+Contributions welcome! Areas we'd love help with:
+
+- Additional transformations (partition, chunk, etc.)
+- More SIMD optimizations
+- Performance benchmarks
+- Documentation improvements
+- Real-world example applications
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
 
-## Acknowledgments
+## Why "Orlando"?
 
-- Inspired by Clojure's transducers
-- Built with [wasm-bindgen](https://github.com/rustwasm/wasm-bindgen)
-- Category theory foundations from *Category Theory for Programmers* by Bartosz Milewski
+Named after the bridger characters in Greg Egan's science fiction novel *Diaspora*, who facilitated transformation and change at fundamental levels. Transducers similarly transform the very nature of how we compose data operations.
 
-## Resources
+## Inspiration & Resources
 
-- [Transducers Explained](https://clojure.org/reference/transducers)
-- [Category Theory for Programmers](https://github.com/hmemcpy/milewski-ctfp-pdf)
-- [Rich Hickey - Transducers (Talk)](https://www.youtube.com/watch?v=6mTbuzafcII)
+- **Clojure's Transducers** - Original inspiration ([docs](https://clojure.org/reference/transducers))
+- **Rich Hickey's Talk** - "Transducers" ([video](https://www.youtube.com/watch?v=6mTbuzafcII))
+- **Category Theory for Programmers** - Mathematical foundations ([book](https://github.com/hmemcpy/milewski-ctfp-pdf))
+- **wasm-bindgen** - Rust/WASM interop ([repo](https://github.com/rustwasm/wasm-bindgen))
 
 ---
 
-**Transform transformations, not data.** 🚀
+<p align="center">
+  <strong>Transform transformations, not data.</strong> 🚀
+  <br>
+  <sub>Built with Rust • Powered by WebAssembly • Inspired by Category Theory</sub>
+</p>

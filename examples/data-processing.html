@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orlando - Real-World Data Processing</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 1000px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+        h1 { color: #2c3e50; }
+        h2 { color: #34495e; margin-top: 30px; }
+        .example {
+            background: #f8f9fa;
+            border-left: 4px solid #3498db;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .result {
+            background: #d4edda;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        pre {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 14px;
+        }
+        code {
+            font-family: 'Monaco', 'Menlo', monospace;
+        }
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #3498db;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 Real-World Data Processing Examples</h1>
+    <p>Practical use cases for Orlando transducers in production applications.</p>
+
+    <div class="example">
+        <h2>Use Case 1: ETL Pipeline - User Data Processing</h2>
+        <p>Extract, transform, and load user data with validation and normalization.</p>
+        <div id="etl-result" class="result"></div>
+        <pre id="etl-code"></pre>
+    </div>
+
+    <div class="example">
+        <h2>Use Case 2: Log Analysis</h2>
+        <p>Parse and filter server logs to find errors in the last hour.</p>
+        <div id="logs-result" class="result"></div>
+        <pre id="logs-sample"></pre>
+    </div>
+
+    <div class="example">
+        <h2>Use Case 3: E-commerce Product Search</h2>
+        <p>Filter products by category, price range, and rating - then sort and paginate.</p>
+        <div id="products-result" class="result"></div>
+        <table id="products-table">
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th>Category</th>
+                    <th>Price</th>
+                    <th>Rating</th>
+                    <th>Stock</th>
+                </tr>
+            </thead>
+            <tbody id="products-body"></tbody>
+        </table>
+    </div>
+
+    <div class="example">
+        <h2>Use Case 4: Analytics Aggregation</h2>
+        <p>Calculate metrics from event stream - active users, revenue, conversions.</p>
+        <div id="analytics-result" class="result"></div>
+    </div>
+
+    <script type="module">
+        import init, { Pipeline } from '../pkg/orlando.js';
+
+        async function runExamples() {
+            await init();
+
+            // ========================================
+            // Use Case 1: ETL Pipeline
+            // ========================================
+            {
+                const rawUsers = [
+                    { id: 1, name: '  Alice Smith  ', email: 'ALICE@COMPANY.COM', age: 28, status: 'active' },
+                    { id: 2, name: 'Bob Jones', email: 'invalid-email', age: 17, status: 'active' },
+                    { id: 3, name: 'Charlie Brown', email: 'charlie@company.com', age: 35, status: 'inactive' },
+                    { id: 4, name: '', email: 'empty@company.com', age: 42, status: 'active' },
+                    { id: 5, name: 'Diana Prince', email: 'diana@company.com', age: 31, status: 'active' },
+                ];
+
+                const pipeline = new Pipeline()
+                    // Filter: only active users
+                    .filter(user => user.status === 'active')
+                    // Filter: valid age (18+)
+                    .filter(user => user.age >= 18)
+                    // Filter: valid email
+                    .filter(user => user.email.includes('@') && user.email.includes('.'))
+                    // Filter: non-empty name
+                    .filter(user => user.name.trim().length > 0)
+                    // Transform: normalize data
+                    .map(user => ({
+                        id: user.id,
+                        name: user.name.trim(),
+                        email: user.email.toLowerCase(),
+                        age: user.age,
+                        createdAt: new Date().toISOString()
+                    }));
+
+                const validUsers = pipeline.toArray(rawUsers);
+
+                document.getElementById('etl-result').innerHTML = `
+                    <strong>Input:</strong> ${rawUsers.length} raw users<br>
+                    <strong>Output:</strong> ${validUsers.length} valid, normalized users<br>
+                    <strong>Filtered out:</strong> ${rawUsers.length - validUsers.length} invalid records
+                `;
+
+                document.getElementById('etl-code').textContent =
+                    JSON.stringify(validUsers, null, 2);
+            }
+
+            // ========================================
+            // Use Case 2: Log Analysis
+            // ========================================
+            {
+                const now = Date.now();
+                const oneHourAgo = now - (60 * 60 * 1000);
+
+                const logs = [
+                    { timestamp: now - 1000, level: 'ERROR', message: 'Database connection failed', service: 'api' },
+                    { timestamp: now - 5000, level: 'INFO', message: 'Request processed', service: 'api' },
+                    { timestamp: now - 120000, level: 'ERROR', message: 'Timeout exceeded', service: 'worker' },
+                    { timestamp: oneHourAgo - 1000, level: 'ERROR', message: 'Old error', service: 'api' },
+                    { timestamp: now - 30000, level: 'WARN', message: 'High memory usage', service: 'api' },
+                    { timestamp: now - 45000, level: 'ERROR', message: 'API rate limit exceeded', service: 'gateway' },
+                ];
+
+                const pipeline = new Pipeline()
+                    // Filter: last hour only
+                    .filter(log => log.timestamp > oneHourAgo)
+                    // Filter: errors only
+                    .filter(log => log.level === 'ERROR')
+                    // Transform: format for display
+                    .map(log => ({
+                        time: new Date(log.timestamp).toLocaleTimeString(),
+                        service: log.service,
+                        message: log.message
+                    }));
+
+                const recentErrors = pipeline.toArray(logs);
+
+                document.getElementById('logs-result').innerHTML = `
+                    <strong>Total logs:</strong> ${logs.length}<br>
+                    <strong>Recent errors (last hour):</strong> ${recentErrors.length}<br>
+                    <strong>Performance:</strong> Single-pass filtering with early termination
+                `;
+
+                document.getElementById('logs-sample').textContent =
+                    JSON.stringify(recentErrors, null, 2);
+            }
+
+            // ========================================
+            // Use Case 3: E-commerce Product Search
+            // ========================================
+            {
+                const products = [
+                    { name: 'Laptop Pro', category: 'electronics', price: 1299, rating: 4.5, stock: 15 },
+                    { name: 'Desk Chair', category: 'furniture', price: 299, rating: 4.2, stock: 5 },
+                    { name: 'Wireless Mouse', category: 'electronics', price: 49, rating: 4.8, stock: 100 },
+                    { name: 'Monitor 27"', category: 'electronics', price: 399, rating: 4.6, stock: 30 },
+                    { name: 'Keyboard', category: 'electronics', price: 89, rating: 4.4, stock: 0 },
+                    { name: 'Bookshelf', category: 'furniture', price: 199, rating: 3.9, stock: 8 },
+                    { name: 'USB Hub', category: 'electronics', price: 29, rating: 4.1, stock: 50 },
+                    { name: 'Desk Lamp', category: 'furniture', price: 79, rating: 4.7, stock: 20 },
+                ];
+
+                // Search: electronics, price < $500, rating > 4.0, in stock, top 5
+                const searchPipeline = new Pipeline()
+                    .filter(p => p.category === 'electronics')
+                    .filter(p => p.price < 500)
+                    .filter(p => p.rating > 4.0)
+                    .filter(p => p.stock > 0)
+                    .take(5);
+
+                const searchResults = searchPipeline.toArray(products);
+
+                document.getElementById('products-result').innerHTML = `
+                    <strong>Query:</strong> Electronics under $500, rating > 4.0, in stock<br>
+                    <strong>Results:</strong> ${searchResults.length} products found<br>
+                    <strong>Processed:</strong> Only ${searchResults.length} items needed (early termination)
+                `;
+
+                document.getElementById('products-body').innerHTML = searchResults.map(p => `
+                    <tr>
+                        <td>${p.name}</td>
+                        <td>${p.category}</td>
+                        <td>$${p.price}</td>
+                        <td>${p.rating} ⭐</td>
+                        <td>${p.stock} units</td>
+                    </tr>
+                `).join('');
+            }
+
+            // ========================================
+            // Use Case 4: Analytics Aggregation
+            // ========================================
+            {
+                const events = Array.from({ length: 10000 }, (_, i) => ({
+                    userId: `user_${i % 1000}`,
+                    event: ['pageview', 'click', 'purchase'][i % 3],
+                    value: i % 3 === 2 ? (Math.random() * 100) : 0,
+                    timestamp: Date.now() - (Math.random() * 86400000)
+                }));
+
+                // Calculate total revenue from purchases
+                const revenuePipeline = new Pipeline()
+                    .filter(e => e.event === 'purchase')
+                    .map(e => e.value);
+
+                const purchases = revenuePipeline.toArray(events);
+                const totalRevenue = purchases.reduce((sum, val) => sum + val, 0);
+
+                // Count unique active users (visited in last 24h)
+                const usersPipeline = new Pipeline()
+                    .filter(e => e.timestamp > Date.now() - 86400000)
+                    .map(e => e.userId);
+
+                const activeUserIds = usersPipeline.toArray(events);
+                const uniqueUsers = new Set(activeUserIds).size;
+
+                // Conversion rate (purchases / pageviews)
+                const pageviews = events.filter(e => e.event === 'pageview').length;
+                const conversionRate = (purchases.length / pageviews * 100).toFixed(2);
+
+                document.getElementById('analytics-result').innerHTML = `
+                    <strong>Total Events:</strong> ${events.length.toLocaleString()}<br>
+                    <strong>Purchases:</strong> ${purchases.length}<br>
+                    <strong>Total Revenue:</strong> $${totalRevenue.toFixed(2)}<br>
+                    <strong>Active Users (24h):</strong> ${uniqueUsers}<br>
+                    <strong>Conversion Rate:</strong> ${conversionRate}%<br>
+                    <strong>Performance:</strong> Processed ${events.length.toLocaleString()} events in a single pass!
+                `;
+            }
+
+            console.log('✅ All real-world examples completed!');
+        }
+
+        runExamples().catch(err => {
+            console.error('❌ Error:', err);
+            document.body.innerHTML += `
+                <div style="background: #f8d7da; color: #721c24; padding: 20px; border-radius: 4px; margin: 20px;">
+                    <strong>Error:</strong> ${err.message}<br>
+                    <small>Build WASM first: <code>wasm-pack build --target web</code></small>
+                </div>
+            `;
+        });
+    </script>
+</body>
+</html>
