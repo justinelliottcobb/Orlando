@@ -3,9 +3,6 @@
 //! Orlando is a high-performance data transformation library that implements transducers
 //! in Rust, compiling to WebAssembly for use in JavaScript applications.
 //!
-//! Named after the bridger characters in Greg Egan's *Diaspora*, who facilitate
-//! transformation and change at fundamental levels.
-//!
 //! ## What are Transducers?
 //!
 //! Transducers compose transformations, not data. Instead of creating intermediate collections:
