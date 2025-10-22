@@ -1,9 +1,5 @@
 # Orlando: Compositional Data Transformation
 
-> "The Bridgers embodied a spirit of change, of transformation at the most fundamental level."
-> 
-> — Greg Egan, *Diaspora*
-
 Orlando is a high-performance data transformation library that implements **transducers** in Rust, compiling to WebAssembly for blazing-fast JavaScript interop.
 
 ## What Are Transducers?
