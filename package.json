@@ -1,0 +1,42 @@
+{
+  "name": "orlando-transducers",
+  "version": "0.1.0",
+  "description": "Compositional data transformation with transducers - Rust/WASM powered",
+  "main": "pkg/orlando.js",
+  "types": "pkg/orlando.d.ts",
+  "files": [
+    "pkg"
+  ],
+  "scripts": {
+    "build": "wasm-pack build --target web --out-dir pkg",
+    "build:release": "wasm-pack build --release --target web --out-dir pkg",
+    "build:nodejs": "wasm-pack build --target nodejs --out-dir pkg",
+    "test": "wasm-pack test --headless --firefox",
+    "test:chrome": "wasm-pack test --headless --chrome",
+    "bench": "cargo bench",
+    "clean": "cargo clean && rm -rf pkg"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/orlando.git"
+  },
+  "keywords": [
+    "transducers",
+    "wasm",
+    "webassembly",
+    "functional",
+    "data-transformation",
+    "performance",
+    "composable",
+    "category-theory"
+  ],
+  "author": "Elliott Hall",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/yourusername/orlando/issues"
+  },
+  "homepage": "https://github.com/yourusername/orlando#readme",
+  "devDependencies": {
+    "wasm-pack": "^0.12.0"
+  }
+}

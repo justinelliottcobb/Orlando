@@ -1,1 +1,6 @@
 /target
+/pkg
+node_modules
+*.log
+Cargo.lock
+.DS_Store
