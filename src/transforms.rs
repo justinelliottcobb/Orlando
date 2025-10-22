@@ -144,7 +144,7 @@ impl<T: 'static> Transducer<T, T> for Take<T> {
     {
         let n = self.n;
         let count = Rc::clone(&self.count);
-        
+
         Box::new(move |acc, val| {
             let mut c = count.borrow_mut();
             if *c < n {
@@ -245,7 +245,7 @@ impl<T: 'static> Transducer<T, T> for Drop<T> {
     {
         let n = self.n;
         let count = Rc::clone(&self.count);
-        
+
         Box::new(move |acc, val| {
             let mut c = count.borrow_mut();
             if *c < n {
@@ -347,14 +347,14 @@ impl<T: PartialEq + Clone + 'static> Transducer<T, T> for Unique<T> {
         Acc: 'static,
     {
         let last = Rc::clone(&self.last);
-        
+
         Box::new(move |acc, val| {
             let mut l = last.borrow_mut();
             let should_process = match l.as_ref() {
                 None => true,
                 Some(prev) => prev != &val,
             };
-            
+
             if should_process {
                 *l = Some(val.clone());
                 reducer(acc, val)
@@ -535,7 +535,7 @@ mod tests {
             v.push(x);
             cont(v)
         };
-        
+
         let transformed = double.apply(reducer);
         let result = transformed(vec![], 5);
         assert_eq!(result.unwrap(), vec![10]);
@@ -549,7 +549,7 @@ mod tests {
             v.push(x);
             cont(v)
         };
-        
+
         let transformed = evens.apply(reducer);
         let r1 = transformed(vec![], 2);
         let r2 = transformed(r1.unwrap(), 3);
@@ -564,7 +564,7 @@ mod tests {
             v.push(x);
             cont(v)
         };
-        
+
         let transformed = take_2.apply(reducer);
         let r1 = transformed(vec![], 1);
         assert!(r1.is_continue());

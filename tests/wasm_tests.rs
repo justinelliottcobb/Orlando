@@ -4,8 +4,8 @@
 
 #![cfg(target_arch = "wasm32")]
 
-use wasm_bindgen_test::*;
 use orlando::*;
+use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
@@ -23,7 +23,7 @@ fn test_wasm_basic_pipeline() {
 fn test_wasm_early_termination() {
     let pipeline = Take::<i32>::new(10);
     let result = to_vec(&pipeline, 1..1_000_000);
-    
+
     assert_eq!(result.len(), 10);
     assert_eq!(result, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 }
@@ -102,7 +102,7 @@ fn test_wasm_simd_operations() {
     use orlando::simd::*;
 
     let data = vec![1.0, 2.0, 3.0, 4.0];
-    
+
     // map_f64_simd
     let result = map_f64_simd(&data, |x| x * 2.0);
     assert_eq!(result, vec![2.0, 4.0, 6.0, 8.0]);

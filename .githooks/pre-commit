@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Pre-commit hook for Orlando transducer library
+# Runs formatting, linting, and tests before allowing commits
+
+set -e  # Exit on any error
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+echo -e "${BLUE}🔍 Running pre-commit checks...${NC}\n"
+
+# Check if we're on WASM target (if so, skip native tests)
+NATIVE_TARGET="x86_64-unknown-linux-gnu"
+
+# 1. Rustfmt - Code formatting
+echo -e "${YELLOW}1. Running rustfmt...${NC}"
+if ! cargo fmt --all -- --check; then
+    echo -e "${RED}❌ Formatting check failed!${NC}"
+    echo -e "${YELLOW}💡 Run 'cargo fmt --all' to fix formatting${NC}\n"
+    exit 1
+fi
+echo -e "${GREEN}✅ Formatting check passed${NC}\n"
+
+# 2. Clippy - Linting
+echo -e "${YELLOW}2. Running clippy...${NC}"
+if ! cargo clippy --all-targets --all-features --target "$NATIVE_TARGET" -- -D warnings; then
+    echo -e "${RED}❌ Clippy check failed!${NC}"
+    echo -e "${YELLOW}💡 Fix clippy warnings before committing${NC}\n"
+    exit 1
+fi
+echo -e "${GREEN}✅ Clippy check passed${NC}\n"
+
+# 3. Unit tests
+echo -e "${YELLOW}3. Running unit tests...${NC}"
+if ! cargo test --lib --target "$NATIVE_TARGET" --quiet; then
+    echo -e "${RED}❌ Unit tests failed!${NC}"
+    echo -e "${YELLOW}💡 Fix failing tests before committing${NC}\n"
+    exit 1
+fi
+echo -e "${GREEN}✅ Unit tests passed${NC}\n"
+
+# 4. Integration tests (quick mode - skip heavy property tests)
+echo -e "${YELLOW}4. Running integration tests...${NC}"
+if ! cargo test --test integration --target "$NATIVE_TARGET" --quiet; then
+    echo -e "${RED}❌ Integration tests failed!${NC}"
+    echo -e "${YELLOW}💡 Fix failing integration tests before committing${NC}\n"
+    exit 1
+fi
+echo -e "${GREEN}✅ Integration tests passed${NC}\n"
+
+# 5. Build check
+echo -e "${YELLOW}5. Running build check...${NC}"
+if ! cargo build --target "$NATIVE_TARGET" --quiet; then
+    echo -e "${RED}❌ Build failed!${NC}"
+    echo -e "${YELLOW}💡 Fix build errors before committing${NC}\n"
+    exit 1
+fi
+echo -e "${GREEN}✅ Build check passed${NC}\n"
+
+echo -e "${GREEN}✨ All pre-commit checks passed!${NC}"
+echo -e "${BLUE}📝 Proceeding with commit...${NC}\n"
+
+exit 0

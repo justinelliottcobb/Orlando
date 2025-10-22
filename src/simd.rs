@@ -8,6 +8,7 @@
 use std::arch::wasm32::*;
 
 /// Threshold for using SIMD operations (in elements)
+#[allow(dead_code)]
 const SIMD_THRESHOLD: usize = 64;
 
 /// SIMD-accelerated map for f64 arrays.
@@ -34,14 +35,14 @@ where
         unsafe {
             // Load 2 f64 values
             let v = v128_load(chunk.as_ptr() as *const v128);
-            
+
             // Extract lanes, apply function, rebuild vector
             let lane0 = f64x2_extract_lane::<0>(v);
             let lane1 = f64x2_extract_lane::<1>(v);
-            
+
             let r0 = f(lane0);
             let r1 = f(lane1);
-            
+
             result.push(r0);
             result.push(r1);
         }
@@ -137,7 +138,7 @@ pub fn sum_f64_simd(data: &[f64]) -> f64 {
 #[inline]
 pub fn mul_f64_simd(a: &[f64], b: &[f64]) -> Vec<f64> {
     assert_eq!(a.len(), b.len());
-    
+
     if a.len() < SIMD_THRESHOLD {
         return a.iter().zip(b.iter()).map(|(&x, &y)| x * y).collect();
     }
@@ -153,7 +154,7 @@ pub fn mul_f64_simd(a: &[f64], b: &[f64]) -> Vec<f64> {
             let va = v128_load(chunk_a.as_ptr() as *const v128);
             let vb = v128_load(chunk_b.as_ptr() as *const v128);
             let vc = f64x2_mul(va, vb);
-            
+
             result.push(f64x2_extract_lane::<0>(vc));
             result.push(f64x2_extract_lane::<1>(vc));
         }

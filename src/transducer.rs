@@ -152,7 +152,7 @@ mod tests {
             v.push(x);
             cont(v)
         };
-        
+
         let transformed = id.apply(reducer);
         let result = transformed(vec![], 42);
         assert_eq!(result.unwrap(), vec![42]);
@@ -163,7 +163,7 @@ mod tests {
         // Identity should pass values through unchanged
         let id = Identity::<i32>::new();
         let reducer = |acc: i32, x: i32| cont(acc + x);
-        
+
         let transformed = id.apply(reducer);
         assert_eq!(transformed(0, 5).unwrap(), 5);
         assert_eq!(transformed(10, 5).unwrap(), 15);

@@ -213,17 +213,58 @@ This mathematical foundation ensures:
 
 Composition is categorical composition. The library includes comprehensive tests verifying these laws hold.
 
-## Building
+## Development Setup
+
+### Quick Start
 
 ```bash
-# Install dependencies
+# Clone the repository
+git clone https://github.com/yourusername/orlando.git
+cd orlando
+
+# Install Git hooks (recommended)
+./scripts/setup-hooks.sh
+
+# Build the project
 cargo build
 
 # Run tests
-cargo test
+cargo test --target x86_64-unknown-linux-gnu
+```
+
+### Git Hooks
+
+Orlando uses Git hooks to maintain code quality. The hooks automatically run:
+
+**Pre-commit:**
+- Code formatting (rustfmt)
+- Linting (clippy)
+- Unit tests
+- Integration tests
+- Build check
+
+**Pre-push:**
+- All tests including property-based tests
+- Release build verification
+
+To install hooks:
+```bash
+./scripts/setup-hooks.sh
+```
+
+See [.githooks/README.md](.githooks/README.md) for more details.
+
+## Building
+
+```bash
+# Run tests
+cargo test --target x86_64-unknown-linux-gnu
+
+# Run property-based tests
+cargo test --test property_tests --target x86_64-unknown-linux-gnu
 
 # Run benchmarks
-cargo bench
+cargo bench --target x86_64-unknown-linux-gnu
 
 # Build WASM (for JavaScript)
 npm run build

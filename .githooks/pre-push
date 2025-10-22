@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Pre-push hook for Orlando transducer library
+# Runs comprehensive tests including property-based tests
+
+set -e
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+echo -e "${BLUE}🚀 Running pre-push checks...${NC}\n"
+
+NATIVE_TARGET="x86_64-unknown-linux-gnu"
+
+# 1. All unit and integration tests
+echo -e "${YELLOW}1. Running all tests...${NC}"
+if ! cargo test --lib --target "$NATIVE_TARGET" --quiet; then
+    echo -e "${RED}❌ Tests failed!${NC}\n"
+    exit 1
+fi
+echo -e "${GREEN}✅ All tests passed${NC}\n"
+
+# 2. Property-based tests (more comprehensive)
+echo -e "${YELLOW}2. Running property tests...${NC}"
+if ! cargo test --test property_tests --target "$NATIVE_TARGET" --quiet; then
+    echo -e "${RED}❌ Property tests failed!${NC}\n"
+    exit 1
+fi
+echo -e "${GREEN}✅ Property tests passed${NC}\n"
+
+# 3. Integration tests
+echo -e "${YELLOW}3. Running integration tests...${NC}"
+if ! cargo test --test integration --target "$NATIVE_TARGET" --quiet; then
+    echo -e "${RED}❌ Integration tests failed!${NC}\n"
+    exit 1
+fi
+echo -e "${GREEN}✅ Integration tests passed${NC}\n"
+
+# 4. Release build (ensures optimized build works)
+echo -e "${YELLOW}4. Testing release build...${NC}"
+if ! cargo build --release --target "$NATIVE_TARGET" --quiet; then
+    echo -e "${RED}❌ Release build failed!${NC}\n"
+    exit 1
+fi
+echo -e "${GREEN}✅ Release build succeeded${NC}\n"
+
+echo -e "${GREEN}✨ All pre-push checks passed!${NC}"
+echo -e "${BLUE}🚢 Proceeding with push...${NC}\n"
+
+exit 0

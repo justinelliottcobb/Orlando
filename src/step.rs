@@ -171,9 +171,6 @@ mod tests {
         let f = |x| cont(x * 2);
         let g = |x| cont(x + 10);
         let m = cont(42);
-        assert_eq!(
-            m.and_then(f).and_then(g),
-            m.and_then(|x| f(x).and_then(g))
-        );
+        assert_eq!(m.and_then(f).and_then(g), m.and_then(|x| f(x).and_then(g)));
     }
 }

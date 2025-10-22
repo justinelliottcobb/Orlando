@@ -83,7 +83,7 @@ fn test_tap_side_effects() {
     .compose(Filter::new(|x: &i32| *x % 2 == 0));
 
     let result = to_vec(&pipeline, vec![1, 2, 3, 4, 5]);
-    
+
     assert_eq!(result, vec![2, 4]);
     assert_eq!(*logged.borrow(), vec![1, 2, 3, 4, 5]);
 }
@@ -119,15 +119,15 @@ fn test_collectors_last() {
 #[test]
 fn test_collectors_every() {
     let id = Identity::<i32>::new();
-    assert_eq!(every(&id, vec![2, 4, 6, 8], |x| x % 2 == 0), true);
-    assert_eq!(every(&id, vec![2, 3, 6, 8], |x| x % 2 == 0), false);
+    assert!(every(&id, vec![2, 4, 6, 8], |x| x % 2 == 0));
+    assert!(!every(&id, vec![2, 3, 6, 8], |x| x % 2 == 0));
 }
 
 #[test]
 fn test_collectors_some() {
     let id = Identity::<i32>::new();
-    assert_eq!(some(&id, vec![1, 3, 4, 5], |x| x % 2 == 0), true);
-    assert_eq!(some(&id, vec![1, 3, 5, 7], |x| x % 2 == 0), false);
+    assert!(some(&id, vec![1, 3, 4, 5], |x| x % 2 == 0));
+    assert!(!some(&id, vec![1, 3, 5, 7], |x| x % 2 == 0));
 }
 
 #[test]
@@ -145,7 +145,7 @@ fn test_early_termination_efficiency() {
     .compose(Take::new(10));
 
     let result = to_vec(&pipeline, 1..1_000_000);
-    
+
     assert_eq!(result.len(), 10);
     assert_eq!(*processed.borrow(), 10); // Should only process 10 elements
 }
@@ -183,11 +183,11 @@ fn test_identity_laws() {
     let id = Identity::<i32>::new();
 
     let data = vec![1, 2, 3, 4, 5];
-    
+
     // id ∘ f = f
     let left = id.compose(Map::new(|x: i32| x * 2));
     assert_eq!(to_vec(&left, data.clone()), to_vec(&f, data.clone()));
-    
+
     // f ∘ id = f
     let right = Map::new(|x: i32| x * 2).compose(Identity::<i32>::new());
     assert_eq!(to_vec(&right, data.clone()), to_vec(&f, data.clone()));

@@ -3,8 +3,8 @@
 //! This module provides a fluent API for building transducer pipelines
 //! that can be called from JavaScript via WASM.
 
-use wasm_bindgen::prelude::*;
 use js_sys::{Array, Function};
+use wasm_bindgen::prelude::*;
 use web_sys::console;
 
 /// A pipeline represents a composition of transducers that can be applied to data.
@@ -171,7 +171,7 @@ impl Pipeline {
     #[wasm_bindgen(js_name = toArray)]
     pub fn to_array(&self, source: &Array) -> Array {
         let result = Array::new();
-        
+
         for i in 0..source.length() {
             let val = source.get(i);
 
@@ -190,7 +190,7 @@ impl Pipeline {
                 }
             }
         }
-        
+
         result
     }
 
@@ -204,16 +204,16 @@ impl Pipeline {
     #[wasm_bindgen]
     pub fn reduce(&self, source: &Array, reducer: &Function, initial: JsValue) -> JsValue {
         let mut acc = initial;
-        
+
         for i in 0..source.length() {
             let val = source.get(i);
-            
+
             match self.process_value(val) {
                 ProcessResult::Continue(v) => {
                     let this = JsValue::null();
                     acc = reducer.call2(&this, &acc, &v).unwrap_or(acc);
                 }
-                ProcessResult::Skip => {},
+                ProcessResult::Skip => {}
                 ProcessResult::Stop(v) => {
                     if let Some(val) = v {
                         let this = JsValue::null();
@@ -223,7 +223,7 @@ impl Pipeline {
                 }
             }
         }
-        
+
         acc
     }
 
@@ -231,12 +231,9 @@ impl Pipeline {
     #[wasm_bindgen(js_name = logExecution)]
     pub fn log_execution(&self, source: &Array) -> Array {
         console::log_1(&"Pipeline execution:".into());
-        
-        let pipeline = self.tap(&Function::new_with_args(
-            "x",
-            "console.log('Value:', x)"
-        ));
-        
+
+        let pipeline = self.tap(&Function::new_with_args("x", "console.log('Value:', x)"));
+
         pipeline.to_array(source)
     }
 
@@ -246,7 +243,7 @@ impl Pipeline {
         let mut take_count = 0;
         let mut drop_count = 0;
         let mut dropping = false;
-        
+
         for op in &self.operations {
             match op {
                 Operation::Map(f) => {
@@ -286,7 +283,7 @@ impl Pipeline {
                 }
             }
         }
-        
+
         ProcessResult::Continue(val)
     }
 }

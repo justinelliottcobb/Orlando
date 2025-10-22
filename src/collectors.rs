@@ -18,10 +18,7 @@ use crate::transducer::Transducer;
 /// let result = to_vec(&double, vec![1, 2, 3].into_iter());
 /// assert_eq!(result, vec![2, 4, 6]);
 /// ```
-pub fn to_vec<T, U, Iter>(
-    transducer: &impl Transducer<T, U>,
-    source: Iter,
-) -> Vec<U>
+pub fn to_vec<T, U, Iter>(transducer: &impl Transducer<T, U>, source: Iter) -> Vec<U>
 where
     T: 'static,
     U: 'static,
@@ -31,7 +28,7 @@ where
         acc.push(x);
         cont(acc)
     };
-    
+
     let transformed = transducer.apply(reducer);
     let mut result = Vec::new();
 
@@ -100,21 +97,13 @@ where
 /// let result = sum(&double, vec![1, 2, 3].into_iter());
 /// assert_eq!(result, 12);
 /// ```
-pub fn sum<T, U, Iter>(
-    transducer: &impl Transducer<T, U>,
-    source: Iter,
-) -> U
+pub fn sum<T, U, Iter>(transducer: &impl Transducer<T, U>, source: Iter) -> U
 where
     T: 'static,
     U: std::ops::Add<Output = U> + Default + 'static,
     Iter: IntoIterator<Item = T>,
 {
-    reduce(
-        transducer,
-        source,
-        U::default(),
-        |acc, x| cont(acc + x),
-    )
+    reduce(transducer, source, U::default(), |acc, x| cont(acc + x))
 }
 
 /// Count the number of elements.
@@ -129,21 +118,13 @@ where
 /// let result = count(&evens, vec![1, 2, 3, 4, 5].into_iter());
 /// assert_eq!(result, 2);
 /// ```
-pub fn count<T, U, Iter>(
-    transducer: &impl Transducer<T, U>,
-    source: Iter,
-) -> usize
+pub fn count<T, U, Iter>(transducer: &impl Transducer<T, U>, source: Iter) -> usize
 where
     T: 'static,
     U: 'static,
     Iter: IntoIterator<Item = T>,
 {
-    reduce(
-        transducer,
-        source,
-        0usize,
-        |acc, _| cont(acc + 1),
-    )
+    reduce(transducer, source, 0usize, |acc, _| cont(acc + 1))
 }
 
 /// Get the first element (utilizes early termination).
@@ -158,17 +139,14 @@ where
 /// let result = first(&evens, vec![1, 3, 4, 5].into_iter());
 /// assert_eq!(result, Some(4));
 /// ```
-pub fn first<T, U, Iter>(
-    transducer: &impl Transducer<T, U>,
-    source: Iter,
-) -> Option<U>
+pub fn first<T, U, Iter>(transducer: &impl Transducer<T, U>, source: Iter) -> Option<U>
 where
     T: 'static,
     U: 'static,
     Iter: IntoIterator<Item = T>,
 {
     use crate::step::stop;
-    
+
     let reducer = |_acc: Option<U>, x: U| stop(Some(x));
     reduce(transducer, source, None, reducer)
 }
@@ -185,21 +163,13 @@ where
 /// let result = last(&evens, vec![2, 3, 4, 5, 6].into_iter());
 /// assert_eq!(result, Some(6));
 /// ```
-pub fn last<T, U, Iter>(
-    transducer: &impl Transducer<T, U>,
-    source: Iter,
-) -> Option<U>
+pub fn last<T, U, Iter>(transducer: &impl Transducer<T, U>, source: Iter) -> Option<U>
 where
     T: 'static,
     U: 'static,
     Iter: IntoIterator<Item = T>,
 {
-    reduce(
-        transducer,
-        source,
-        None,
-        |_acc, x| cont(Some(x)),
-    )
+    reduce(transducer, source, None, |_acc, x| cont(Some(x)))
 }
 
 /// Test if all elements match a predicate.
@@ -214,11 +184,7 @@ where
 /// let result = every(&id, vec![2, 4, 6].into_iter(), |x| x % 2 == 0);
 /// assert_eq!(result, true);
 /// ```
-pub fn every<T, U, Iter, P>(
-    transducer: &impl Transducer<T, U>,
-    source: Iter,
-    predicate: P,
-) -> bool
+pub fn every<T, U, Iter, P>(transducer: &impl Transducer<T, U>, source: Iter, predicate: P) -> bool
 where
     T: 'static,
     U: 'static,
@@ -226,7 +192,7 @@ where
     P: Fn(&U) -> bool + 'static,
 {
     use crate::step::stop;
-    
+
     let reducer = move |_acc: bool, x: U| {
         if predicate(&x) {
             cont(true)
@@ -234,7 +200,7 @@ where
             stop(false)
         }
     };
-    
+
     reduce(transducer, source, true, reducer)
 }
 
@@ -250,11 +216,7 @@ where
 /// let result = some(&id, vec![1, 3, 4, 5].into_iter(), |x| x % 2 == 0);
 /// assert_eq!(result, true);
 /// ```
-pub fn some<T, U, Iter, P>(
-    transducer: &impl Transducer<T, U>,
-    source: Iter,
-    predicate: P,
-) -> bool
+pub fn some<T, U, Iter, P>(transducer: &impl Transducer<T, U>, source: Iter, predicate: P) -> bool
 where
     T: 'static,
     U: 'static,
@@ -262,7 +224,7 @@ where
     P: Fn(&U) -> bool + 'static,
 {
     use crate::step::stop;
-    
+
     let reducer = move |_acc: bool, x: U| {
         if predicate(&x) {
             stop(true)
@@ -270,7 +232,7 @@ where
             cont(false)
         }
     };
-    
+
     reduce(transducer, source, false, reducer)
 }
 
@@ -311,7 +273,7 @@ mod tests {
     fn test_every() {
         use crate::transducer::Identity;
         let id = Identity::<i32>::new();
-        assert_eq!(every(&id, vec![2, 4, 6], |x| x % 2 == 0), true);
-        assert_eq!(every(&id, vec![2, 3, 6], |x| x % 2 == 0), false);
+        assert!(every(&id, vec![2, 4, 6], |x| x % 2 == 0));
+        assert!(!every(&id, vec![2, 3, 6], |x| x % 2 == 0));
     }
 }

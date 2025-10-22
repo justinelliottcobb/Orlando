@@ -1,10 +1,10 @@
 //! # Orlando: Compositional Data Transformation
 //!
-//! > "The Bridgers embodied a spirit of change, of transformation at the most fundamental level."
-//! > — Greg Egan, *Diaspora*
-//!
 //! Orlando is a high-performance data transformation library that implements transducers
 //! in Rust, compiling to WebAssembly for use in JavaScript applications.
+//!
+//! Named after the bridger characters in Greg Egan's *Diaspora*, who facilitate
+//! transformation and change at fundamental levels.
 //!
 //! ## What are Transducers?
 //!
@@ -82,29 +82,24 @@
 //!
 //! Benchmarks show 3-5x performance improvement over pure JavaScript array chaining.
 
+pub mod collectors;
+pub mod simd;
 pub mod step;
 pub mod transducer;
 pub mod transforms;
-pub mod collectors;
-pub mod simd;
 
 #[cfg(target_arch = "wasm32")]
 pub mod pipeline;
 
 // Re-export main types for convenience
-pub use step::{Step, cont, stop, is_stopped, unwrap_step};
-pub use transducer::{Transducer, Identity, Compose};
+pub use step::{cont, is_stopped, stop, unwrap_step, Step};
+pub use transducer::{Compose, Identity, Transducer};
 
 // Re-export common transforms
-pub use transforms::{
-    Map, Filter, Take, TakeWhile, Drop, DropWhile,
-    Unique, UniqueBy, Scan, Tap,
-};
+pub use transforms::{Drop, DropWhile, Filter, Map, Scan, Take, TakeWhile, Tap, Unique, UniqueBy};
 
 // Re-export collectors
-pub use collectors::{
-    to_vec, reduce, sum, count, first, last, every, some,
-};
+pub use collectors::{count, every, first, last, reduce, some, sum, to_vec};
 
 #[cfg(target_arch = "wasm32")]
 pub use pipeline::Pipeline;
@@ -147,10 +142,10 @@ mod tests {
         // Identity law: id ∘ f = f ∘ id = f
         let f = Map::new(|x: i32| x * 2);
         let id = Identity::<i32>::new();
-        
+
         let left = id.compose(Map::new(|x: i32| x * 2));
         let right = Map::new(|x: i32| x * 2).compose(Identity::<i32>::new());
-        
+
         let data = vec![1, 2, 3, 4, 5];
         assert_eq!(to_vec(&left, data.clone()), to_vec(&f, data.clone()));
         assert_eq!(to_vec(&right, data.clone()), to_vec(&f, data.clone()));
