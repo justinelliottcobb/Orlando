@@ -859,3 +859,137 @@ proptest! {
         prop_assert!(result.iter().all(|x| x % 2 != 0));
     }
 }
+
+// Property: Chunk produces chunks of exact size (except possibly last)
+proptest! {
+    #[test]
+    fn test_chunk_sizes(vec in prop::collection::vec(any::<i32>(), 0..100), size in 1usize..10) {
+        use orlando::Chunk;
+
+        let chunker = Chunk::new(size);
+        let result = to_vec(&chunker, vec.clone());
+
+        // All chunks should be exactly the specified size
+        prop_assert!(result.iter().all(|chunk| chunk.len() == size));
+    }
+}
+
+// Property: Chunk flattened equals original (minus partial)
+proptest! {
+    #[test]
+    fn test_chunk_flatten_roundtrip(vec in prop::collection::vec(any::<i32>(), 0..100), size in 1usize..10) {
+        use orlando::Chunk;
+
+        let chunker = Chunk::new(size);
+        let chunks = to_vec(&chunker, vec.clone());
+
+        // Flatten the chunks
+        let flattened: Vec<i32> = chunks.into_iter().flatten().collect();
+
+        // Should equal original up to last complete chunk
+        let expected_len = (vec.len() / size) * size;
+        prop_assert_eq!(flattened, vec[..expected_len].to_vec());
+    }
+}
+
+// Property: Chunk count is floor(length / size)
+proptest! {
+    #[test]
+    fn test_chunk_count(vec in prop::collection::vec(any::<i32>(), 0..100), size in 1usize..10) {
+        use orlando::Chunk;
+
+        let chunker = Chunk::new(size);
+        let chunks = to_vec(&chunker, vec.clone());
+
+        let expected_count = vec.len() / size;
+        prop_assert_eq!(chunks.len(), expected_count);
+    }
+}
+
+// Property: Chunk preserves order within chunks
+proptest! {
+    #[test]
+    fn test_chunk_preserves_order(vec in prop::collection::vec(0i32..100, 0..50), size in 1usize..10) {
+        use orlando::Chunk;
+
+        let chunker = Chunk::new(size);
+        let chunks = to_vec(&chunker, vec.clone());
+
+        // Verify each chunk contains consecutive elements from original
+        for (i, chunk) in chunks.iter().enumerate() {
+            let start = i * size;
+            let end = start + size;
+            prop_assert_eq!(chunk, &vec[start..end]);
+        }
+    }
+}
+
+// Property: Chunk with early termination works correctly
+proptest! {
+    #[test]
+    fn test_chunk_with_take(vec in prop::collection::vec(any::<i32>(), 10..100), chunk_size in 2usize..5, n in 1usize..5) {
+        use orlando::{Chunk, Take};
+
+        // Chunk then take n chunks
+        let pipeline = Chunk::new(chunk_size).compose(Take::new(n));
+        let result = to_vec(&pipeline, vec.clone());
+
+        // Should produce exactly n chunks (or fewer if not enough elements)
+        let max_chunks = vec.len() / chunk_size;
+        let expected_count = n.min(max_chunks);
+        prop_assert_eq!(result.len(), expected_count);
+
+        // All chunks should be the right size
+        prop_assert!(result.iter().all(|chunk| chunk.len() == chunk_size));
+    }
+}
+
+// Property: GroupBy preserves all elements
+proptest! {
+    #[test]
+    fn test_group_by_total_count(vec in prop::collection::vec(any::<i32>(), 0..100)) {
+        use orlando::transducer::Identity;
+
+        let id = Identity::<i32>::new();
+        let groups = group_by(&id, vec.clone(), |x| x % 5);
+
+        // Total elements across all groups should equal original
+        let total: usize = groups.values().map(|v| v.len()).sum();
+        prop_assert_eq!(total, vec.len());
+    }
+}
+
+// Property: GroupBy groups correctly
+proptest! {
+    #[test]
+    fn test_group_by_correctness(vec in prop::collection::vec(any::<i32>(), 0..100)) {
+        use orlando::transducer::Identity;
+
+        let id = Identity::<i32>::new();
+        let groups = group_by(&id, vec, |x| x % 3);
+
+        // All elements in each group should have the same key
+        for (key, values) in groups.iter() {
+            prop_assert!(values.iter().all(|v| v % 3 == *key));
+        }
+    }
+}
+
+// Property: GroupBy preserves order within groups
+proptest! {
+    #[test]
+    fn test_group_by_preserves_order(vec in prop::collection::vec(0i32..50, 0..50)) {
+        use orlando::transducer::Identity;
+
+        let id = Identity::<i32>::new();
+        let groups = group_by(&id, vec.clone(), |x| x % 3);
+
+        // Elements within each group should appear in original order
+        for key in 0..3 {
+            if let Some(group) = groups.get(&key) {
+                let expected: Vec<i32> = vec.iter().filter(|x| *x % 3 == key).copied().collect();
+                prop_assert_eq!(group, &expected);
+            }
+        }
+    }
+}

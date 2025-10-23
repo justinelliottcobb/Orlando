@@ -94,11 +94,14 @@ pub use transducer::{Compose, Identity, Transducer};
 
 // Re-export common transforms
 pub use transforms::{
-    Drop, DropWhile, Filter, FlatMap, Map, Reject, Scan, Take, TakeWhile, Tap, Unique, UniqueBy,
+    Chunk, Drop, DropWhile, Filter, FlatMap, Map, Reject, Scan, Take, TakeWhile, Tap, Unique,
+    UniqueBy,
 };
 
 // Re-export collectors
-pub use collectors::{count, every, find, first, last, partition, reduce, some, sum, to_vec};
+pub use collectors::{
+    contains, count, every, find, first, group_by, last, none, partition, reduce, some, sum, to_vec,
+};
 
 #[cfg(target_arch = "wasm32")]
 pub use pipeline::Pipeline;

@@ -162,6 +162,73 @@ where
     }
 }
 
+/// Chunk transducer - groups consecutive elements into fixed-size chunks.
+///
+/// Only emits complete chunks. The final partial chunk (if any) is dropped.
+/// This is consistent with streaming semantics where we don't have a completion phase.
+///
+/// # Examples
+///
+/// ```
+/// use orlando::transforms::Chunk;
+/// use orlando::collectors::to_vec;
+///
+/// let chunker = Chunk::new(2);
+/// let result = to_vec(&chunker, vec![1, 2, 3, 4, 5, 6]);
+/// assert_eq!(result, vec![vec![1, 2], vec![3, 4], vec![5, 6]]);
+///
+/// // Partial chunk at end is dropped
+/// let result2 = to_vec(&chunker, vec![1, 2, 3, 4, 5]);
+/// assert_eq!(result2, vec![vec![1, 2], vec![3, 4]]); // [5] is dropped
+/// ```
+pub struct Chunk<T> {
+    size: usize,
+    buffer: Rc<RefCell<Vec<T>>>,
+}
+
+impl<T> Chunk<T>
+where
+    T: Clone,
+{
+    pub fn new(size: usize) -> Self {
+        assert!(size > 0, "Chunk size must be greater than 0");
+        Chunk {
+            size,
+            buffer: Rc::new(RefCell::new(Vec::with_capacity(size))),
+        }
+    }
+}
+
+impl<T> Transducer<T, Vec<T>> for Chunk<T>
+where
+    T: Clone + 'static,
+{
+    #[inline(always)]
+    fn apply<Acc, R>(&self, reducer: R) -> Box<dyn Fn(Acc, T) -> Step<Acc>>
+    where
+        R: Fn(Acc, Vec<T>) -> Step<Acc> + 'static,
+        Acc: 'static,
+    {
+        let size = self.size;
+        let buffer = Rc::clone(&self.buffer);
+
+        Box::new(move |acc, val| {
+            let mut buf = buffer.borrow_mut();
+            buf.push(val);
+
+            // If buffer is full, emit the chunk
+            if buf.len() == size {
+                let chunk = buf.clone();
+                buf.clear();
+                reducer(acc, chunk)
+            } else {
+                // Keep accumulating
+                cont(acc)
+            }
+        })
+    }
+}
+
 /// Take transducer - takes the first n elements, then stops.
 ///
 /// This demonstrates early termination via the Step monad.
@@ -722,6 +789,50 @@ mod tests {
         let result2 = to_vec(&filter_odds, data);
 
         assert_eq!(result1, result2);
+    }
+
+    #[test]
+    fn test_chunk() {
+        use crate::collectors::to_vec;
+
+        let chunker = Chunk::new(2);
+        let result = to_vec(&chunker, vec![1, 2, 3, 4, 5, 6]);
+        assert_eq!(result, vec![vec![1, 2], vec![3, 4], vec![5, 6]]);
+    }
+
+    #[test]
+    fn test_chunk_partial() {
+        use crate::collectors::to_vec;
+
+        // Partial chunk at end is dropped
+        let chunker = Chunk::new(2);
+        let result = to_vec(&chunker, vec![1, 2, 3, 4, 5]);
+        assert_eq!(result, vec![vec![1, 2], vec![3, 4]]); // [5] is dropped
+    }
+
+    #[test]
+    fn test_chunk_exact() {
+        use crate::collectors::to_vec;
+
+        let chunker = Chunk::new(3);
+        let result = to_vec(&chunker, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert_eq!(result, vec![vec![1, 2, 3], vec![4, 5, 6], vec![7, 8, 9]]);
+    }
+
+    #[test]
+    fn test_chunk_composition() {
+        use crate::collectors::to_vec;
+
+        // Chunk after doubling
+        let pipeline = Map::new(|x: i32| x * 2).compose(Chunk::new(2));
+        let result = to_vec(&pipeline, vec![1, 2, 3, 4]);
+        assert_eq!(result, vec![vec![2, 4], vec![6, 8]]);
+    }
+
+    #[test]
+    #[should_panic(expected = "Chunk size must be greater than 0")]
+    fn test_chunk_zero_size() {
+        let _chunker = Chunk::<i32>::new(0);
     }
 
     #[test]

@@ -5,6 +5,8 @@
 
 use crate::step::{cont, Step};
 use crate::transducer::Transducer;
+use std::collections::HashMap;
+use std::hash::Hash;
 
 /// Execute a transducer over an iterator and collect results into a vector.
 ///
@@ -316,6 +318,117 @@ where
     reduce(transducer, source, None, reducer)
 }
 
+/// Group elements by a key function into a HashMap.
+///
+/// Returns a HashMap where keys are produced by the key function and values
+/// are vectors of elements that share that key.
+///
+/// # Examples
+///
+/// ```
+/// use orlando::collectors::group_by;
+/// use orlando::transducer::Identity;
+/// use std::collections::HashMap;
+///
+/// let id = Identity::<i32>::new();
+/// let groups = group_by(&id, vec![1, 2, 3, 4, 5, 6].into_iter(), |x| x % 3);
+///
+/// assert_eq!(groups.get(&0), Some(&vec![3, 6]));
+/// assert_eq!(groups.get(&1), Some(&vec![1, 4]));
+/// assert_eq!(groups.get(&2), Some(&vec![2, 5]));
+/// ```
+pub fn group_by<T, U, K, Iter, F>(
+    transducer: &impl Transducer<T, U>,
+    source: Iter,
+    key_fn: F,
+) -> HashMap<K, Vec<U>>
+where
+    T: 'static,
+    U: 'static,
+    K: Eq + Hash + 'static,
+    Iter: IntoIterator<Item = T>,
+    F: Fn(&U) -> K + 'static,
+{
+    let reducer = move |mut acc: HashMap<K, Vec<U>>, x: U| {
+        let key = key_fn(&x);
+        acc.entry(key).or_default().push(x);
+        cont(acc)
+    };
+
+    reduce(transducer, source, HashMap::new(), reducer)
+}
+
+/// Test if NO elements match a predicate (inverse of `some`).
+///
+/// Returns true if all elements fail the predicate, false if any match.
+/// Utilizes early termination to stop as soon as a match is found.
+///
+/// # Examples
+///
+/// ```
+/// use orlando::collectors::none;
+/// use orlando::transducer::Identity;
+///
+/// let id = Identity::<i32>::new();
+/// assert!(none(&id, vec![1, 3, 5, 7].into_iter(), |x| x % 2 == 0)); // No evens
+/// assert!(!none(&id, vec![1, 2, 3].into_iter(), |x| x % 2 == 0)); // Has evens
+/// ```
+pub fn none<T, U, Iter, P>(transducer: &impl Transducer<T, U>, source: Iter, predicate: P) -> bool
+where
+    T: 'static,
+    U: 'static,
+    Iter: IntoIterator<Item = T>,
+    P: Fn(&U) -> bool + 'static,
+{
+    use crate::step::stop;
+
+    // Inverse of some - return false (stop) if any element matches
+    let reducer = move |_acc: bool, x: U| {
+        if predicate(&x) {
+            stop(false) // Found a match, return false
+        } else {
+            cont(true) // Keep looking
+        }
+    };
+
+    reduce(transducer, source, true, reducer)
+}
+
+/// Test if the collection contains a specific value.
+///
+/// Returns true if any element equals the target value, false otherwise.
+/// Utilizes early termination to stop as soon as the value is found.
+///
+/// # Examples
+///
+/// ```
+/// use orlando::collectors::contains;
+/// use orlando::transducer::Identity;
+///
+/// let id = Identity::<i32>::new();
+/// assert!(contains(&id, vec![1, 2, 3, 4, 5].into_iter(), &3));
+/// assert!(!contains(&id, vec![1, 2, 4, 5].into_iter(), &3));
+/// ```
+pub fn contains<T, U, Iter>(transducer: &impl Transducer<T, U>, source: Iter, value: &U) -> bool
+where
+    T: 'static,
+    U: PartialEq + Clone + 'static,
+    Iter: IntoIterator<Item = T>,
+{
+    use crate::step::stop;
+
+    let target = value.clone();
+    let reducer = move |_acc: bool, x: U| {
+        if x == target {
+            stop(true) // Found it!
+        } else {
+            cont(false) // Keep looking
+        }
+    };
+
+    reduce(transducer, source, false, reducer)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -422,5 +535,62 @@ mod tests {
         let id = Identity::<i32>::new();
         let result = find(&id, Vec::<i32>::new(), |x| x % 2 == 0);
         assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_group_by() {
+        use crate::transducer::Identity;
+        let id = Identity::<i32>::new();
+        let groups = group_by(&id, vec![1, 2, 3, 4, 5, 6], |x| x % 3);
+
+        assert_eq!(groups.get(&0), Some(&vec![3, 6]));
+        assert_eq!(groups.get(&1), Some(&vec![1, 4]));
+        assert_eq!(groups.get(&2), Some(&vec![2, 5]));
+    }
+
+    #[test]
+    fn test_group_by_with_transform() {
+        // Group after doubling
+        let double = Map::new(|x: i32| x * 2);
+        let groups = group_by(&double, vec![1, 2, 3, 4, 5, 6], |x| x % 4);
+
+        assert_eq!(groups.get(&0), Some(&vec![4, 8, 12])); // 2*2=4, 4*2=8, 6*2=12
+        assert_eq!(groups.get(&2), Some(&vec![2, 6, 10])); // 1*2=2, 3*2=6, 5*2=10
+    }
+
+    #[test]
+    fn test_group_by_empty() {
+        use crate::transducer::Identity;
+        let id = Identity::<i32>::new();
+        let groups = group_by(&id, Vec::<i32>::new(), |x| x % 3);
+
+        assert!(groups.is_empty());
+    }
+
+    #[test]
+    fn test_group_by_single_group() {
+        use crate::transducer::Identity;
+        let id = Identity::<i32>::new();
+        let groups = group_by(&id, vec![3, 6, 9, 12], |x| x % 3);
+
+        // All should be in group 0
+        assert_eq!(groups.get(&0), Some(&vec![3, 6, 9, 12]));
+        assert_eq!(groups.len(), 1);
+    }
+
+    #[test]
+    fn test_none() {
+        use crate::transducer::Identity;
+        let id = Identity::<i32>::new();
+        assert!(none(&id, vec![1, 3, 5, 7], |x| x % 2 == 0)); // No evens
+        assert!(!none(&id, vec![1, 2, 3], |x| x % 2 == 0)); // Has evens
+    }
+
+    #[test]
+    fn test_contains() {
+        use crate::transducer::Identity;
+        let id = Identity::<i32>::new();
+        assert!(contains(&id, vec![1, 2, 3, 4, 5], &3));
+        assert!(!contains(&id, vec![1, 2, 4, 5], &3));
     }
 }
