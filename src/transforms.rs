@@ -151,8 +151,10 @@ impl<T: 'static> Transducer<T, T> for Take<T> {
                 *c += 1;
                 let result = reducer(acc, val);
                 if *c >= n {
-                    // Convert to Stop to signal termination
-                    stop(result.unwrap())
+                    // Convert to Stop to signal termination - extract value regardless of Continue/Stop
+                    match result {
+                        Step::Continue(value) | Step::Stop(value) => stop(value),
+                    }
                 } else {
                     result
                 }
