@@ -466,3 +466,244 @@ impl ProcessState {
 pub fn create_pipeline() -> Pipeline {
     Pipeline::new()
 }
+
+// ============================================================================
+// Multi-Input Operations (Phase 2a)
+// ============================================================================
+
+/// Merge multiple arrays by interleaving their elements in round-robin fashion.
+///
+/// Takes elements from each array in turn until all arrays are exhausted.
+/// If arrays have different lengths, continues with remaining arrays.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { merge } from 'orlando-transducers';
+///
+/// const a = [1, 2, 3];
+/// const b = [4, 5, 6];
+/// const result = merge([a, b]);
+/// // result: [1, 4, 2, 5, 3, 6]
+/// ```
+#[wasm_bindgen]
+pub fn merge(arrays: Array) -> Array {
+    let result = Array::new();
+
+    // Convert JS arrays to iterators
+    let mut iters: Vec<_> = (0..arrays.length())
+        .map(|i| {
+            let arr = arrays
+                .get(i)
+                .dyn_into::<Array>()
+                .unwrap_or_else(|_| Array::new());
+            (arr, 0)
+        })
+        .collect();
+
+    let mut active = true;
+    while active {
+        active = false;
+        for (arr, idx) in &mut iters {
+            if *idx < arr.length() {
+                result.push(&arr.get(*idx));
+                *idx += 1;
+                active = true;
+            }
+        }
+    }
+
+    result
+}
+
+/// Compute the intersection of two arrays (elements in both A and B).
+///
+/// Returns elements that appear in both arrays, preserving order from the first array.
+/// Duplicates from the first array are included if the element exists in the second.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { intersection } from 'orlando-transducers';
+///
+/// const a = [1, 2, 3, 4];
+/// const b = [3, 4, 5, 6];
+/// const result = intersection(a, b);
+/// // result: [3, 4]
+/// ```
+#[wasm_bindgen]
+pub fn intersection(array_a: &Array, array_b: &Array) -> Array {
+    use std::collections::HashSet;
+
+    // Build a set from array B for O(1) lookup
+    let mut set_b = HashSet::new();
+    for i in 0..array_b.length() {
+        let val = array_b.get(i);
+        // Use JSON stringification for comparison (works for primitives and objects)
+        if let Ok(json) = js_sys::JSON::stringify(&val) {
+            set_b.insert(json.as_string().unwrap_or_default());
+        }
+    }
+
+    let result = Array::new();
+    for i in 0..array_a.length() {
+        let val = array_a.get(i);
+        if let Ok(json) = js_sys::JSON::stringify(&val) {
+            if set_b.contains(&json.as_string().unwrap_or_default()) {
+                result.push(&val);
+            }
+        }
+    }
+
+    result
+}
+
+/// Compute the difference of two arrays (elements in A but not in B).
+///
+/// Returns elements from the first array that don't appear in the second,
+/// preserving order from the first array.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { difference } from 'orlando-transducers';
+///
+/// const a = [1, 2, 3, 4];
+/// const b = [3, 4, 5, 6];
+/// const result = difference(a, b);
+/// // result: [1, 2]
+/// ```
+#[wasm_bindgen]
+pub fn difference(array_a: &Array, array_b: &Array) -> Array {
+    use std::collections::HashSet;
+
+    // Build a set from array B for O(1) lookup
+    let mut set_b = HashSet::new();
+    for i in 0..array_b.length() {
+        let val = array_b.get(i);
+        if let Ok(json) = js_sys::JSON::stringify(&val) {
+            set_b.insert(json.as_string().unwrap_or_default());
+        }
+    }
+
+    let result = Array::new();
+    for i in 0..array_a.length() {
+        let val = array_a.get(i);
+        if let Ok(json) = js_sys::JSON::stringify(&val) {
+            if !set_b.contains(&json.as_string().unwrap_or_default()) {
+                result.push(&val);
+            }
+        }
+    }
+
+    result
+}
+
+/// Compute the union of two arrays (unique elements from both A and B).
+///
+/// Returns all unique elements that appear in either array.
+/// Order is preserved: all unique elements from A first, then unique elements from B.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { union } from 'orlando-transducers';
+///
+/// const a = [1, 2, 3];
+/// const b = [3, 4, 5];
+/// const result = union(a, b);
+/// // result: [1, 2, 3, 4, 5]
+/// ```
+#[wasm_bindgen]
+pub fn union(array_a: &Array, array_b: &Array) -> Array {
+    use std::collections::HashSet;
+
+    let mut seen = HashSet::new();
+    let result = Array::new();
+
+    // Add unique elements from A
+    for i in 0..array_a.length() {
+        let val = array_a.get(i);
+        if let Ok(json) = js_sys::JSON::stringify(&val) {
+            if seen.insert(json.as_string().unwrap_or_default()) {
+                result.push(&val);
+            }
+        }
+    }
+
+    // Add unique elements from B
+    for i in 0..array_b.length() {
+        let val = array_b.get(i);
+        if let Ok(json) = js_sys::JSON::stringify(&val) {
+            if seen.insert(json.as_string().unwrap_or_default()) {
+                result.push(&val);
+            }
+        }
+    }
+
+    result
+}
+
+/// Compute the symmetric difference of two arrays (elements in A or B but not both).
+///
+/// Returns elements that appear in exactly one of the two arrays.
+/// Order: unique-to-A elements first, then unique-to-B elements.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { symmetricDifference } from 'orlando-transducers';
+///
+/// const a = [1, 2, 3, 4];
+/// const b = [3, 4, 5, 6];
+/// const result = symmetricDifference(a, b);
+/// // result: [1, 2, 5, 6]
+/// ```
+#[wasm_bindgen(js_name = symmetricDifference)]
+pub fn symmetric_difference(array_a: &Array, array_b: &Array) -> Array {
+    use std::collections::HashSet;
+
+    // Build sets from both arrays
+    let mut set_a = HashSet::new();
+    for i in 0..array_a.length() {
+        let val = array_a.get(i);
+        if let Ok(json) = js_sys::JSON::stringify(&val) {
+            set_a.insert(json.as_string().unwrap_or_default());
+        }
+    }
+
+    let mut set_b = HashSet::new();
+    for i in 0..array_b.length() {
+        let val = array_b.get(i);
+        if let Ok(json) = js_sys::JSON::stringify(&val) {
+            set_b.insert(json.as_string().unwrap_or_default());
+        }
+    }
+
+    let result = Array::new();
+    let mut seen = HashSet::new();
+
+    // Elements in A but not B
+    for i in 0..array_a.length() {
+        let val = array_a.get(i);
+        if let Ok(json) = js_sys::JSON::stringify(&val) {
+            let json_str = json.as_string().unwrap_or_default();
+            if !set_b.contains(&json_str) && seen.insert(json_str) {
+                result.push(&val);
+            }
+        }
+    }
+
+    // Elements in B but not A
+    for i in 0..array_b.length() {
+        let val = array_b.get(i);
+        if let Ok(json) = js_sys::JSON::stringify(&val) {
+            let json_str = json.as_string().unwrap_or_default();
+            if !set_a.contains(&json_str) && seen.insert(json_str) {
+                result.push(&val);
+            }
+        }
+    }
+
+    result
+}

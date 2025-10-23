@@ -524,10 +524,245 @@ See the `/examples` directory for complete working examples:
 - `examples/performance.html` - Performance comparison
 - `examples/typescript/` - TypeScript examples
 
+## Multi-Input Operations
+
+Orlando provides powerful multi-input operations for combining and comparing arrays. These are standalone functions (not Pipeline methods) that enable hybrid composition patterns.
+
+### `merge(arrays)`
+
+Merges multiple arrays by interleaving their elements in round-robin fashion.
+
+```typescript
+merge(arrays: Array<Array<T>>): Array<T>
+```
+
+**Example:**
+```javascript
+import { merge } from 'orlando-transducers';
+
+const a = [1, 2, 3];
+const b = [4, 5, 6];
+const c = [7, 8, 9];
+
+const result = merge([a, b, c]);
+// result: [1, 4, 7, 2, 5, 8, 3, 6, 9]
+```
+
+**Handles different lengths:**
+```javascript
+const a = [1, 2];
+const b = [3, 4, 5, 6];
+const result = merge([a, b]);
+// result: [1, 3, 2, 4, 5, 6]
+```
+
+**Use cases:**
+- Round-robin scheduling
+- Interleaving data from multiple sources
+- Creating alternating patterns
+
+**Hybrid Composition Example:**
+```javascript
+// Process each stream differently, then merge
+const pipeline1 = new Pipeline().map(x => x * 2);
+const pipeline2 = new Pipeline().map(x => x + 10);
+
+const stream1 = pipeline1.toArray([1, 2, 3]);
+const stream2 = pipeline2.toArray([1, 2, 3]);
+
+const merged = merge([stream1, stream2]);
+// merged: [2, 11, 4, 12, 6, 13]
+```
+
+---
+
+### `intersection(arrayA, arrayB)`
+
+Returns elements that appear in both arrays.
+
+```typescript
+intersection(arrayA: Array<T>, arrayB: Array<T>): Array<T>
+```
+
+**Example:**
+```javascript
+import { intersection } from 'orlando-transducers';
+
+const a = [1, 2, 3, 4, 5];
+const b = [3, 4, 5, 6, 7];
+
+const common = intersection(a, b);
+// common: [3, 4, 5]
+```
+
+**Preserves order from first array:**
+```javascript
+const a = [5, 3, 4, 1];
+const b = [1, 3, 5];
+const result = intersection(a, b);
+// result: [5, 3, 1] (order from a)
+```
+
+**Use cases:**
+- Finding matching records across datasets
+- Filtering by membership
+- Database-style joins
+
+---
+
+### `difference(arrayA, arrayB)`
+
+Returns elements in the first array but not in the second.
+
+```typescript
+difference(arrayA: Array<T>, arrayB: Array<T>): Array<T>
+```
+
+**Example:**
+```javascript
+import { difference } from 'orlando-transducers';
+
+const a = [1, 2, 3, 4, 5];
+const b = [3, 4, 5, 6, 7];
+
+const uniqueToA = difference(a, b);
+// uniqueToA: [1, 2]
+```
+
+**Use cases:**
+- Finding new/deleted items
+- Exclusion lists
+- Data reconciliation
+
+---
+
+### `union(arrayA, arrayB)`
+
+Returns all unique elements from both arrays.
+
+```typescript
+union(arrayA: Array<T>, arrayB: Array<T>): Array<T>
+```
+
+**Example:**
+```javascript
+import { union } from 'orlando-transducers';
+
+const a = [1, 2, 3];
+const b = [3, 4, 5];
+
+const allUnique = union(a, b);
+// allUnique: [1, 2, 3, 4, 5]
+```
+
+**Removes duplicates:**
+```javascript
+const a = [1, 2, 2, 3];
+const b = [3, 4, 4, 5];
+const result = union(a, b);
+// result: [1, 2, 3, 4, 5]
+```
+
+**Use cases:**
+- Combining datasets without duplicates
+- Creating master lists
+- Deduplication across sources
+
+---
+
+### `symmetricDifference(arrayA, arrayB)`
+
+Returns elements that appear in exactly one array (not both).
+
+```typescript
+symmetricDifference(arrayA: Array<T>, arrayB: Array<T>): Array<T>
+```
+
+**Example:**
+```javascript
+import { symmetricDifference } from 'orlando-transducers';
+
+const a = [1, 2, 3, 4];
+const b = [3, 4, 5, 6];
+
+const uniqueToEach = symmetricDifference(a, b);
+// uniqueToEach: [1, 2, 5, 6]
+```
+
+**No overlap:**
+```javascript
+const a = [1, 2];
+const b = [3, 4];
+const result = symmetricDifference(a, b);
+// result: [1, 2, 3, 4]
+```
+
+**Use cases:**
+- Finding changed items
+- XOR operations
+- Detecting differences between versions
+
+---
+
+## Hybrid Composition Patterns
+
+Combine transducers with multi-input operations for maximum flexibility.
+
+### Pattern 1: Process → Combine
+
+Process streams independently, then combine:
+
+```javascript
+const pipeline = new Pipeline()
+  .filter(x => x > 0)
+  .map(x => x * 2);
+
+const stream1 = pipeline.toArray(data1);
+const stream2 = pipeline.toArray(data2);
+
+const combined = intersection(stream1, stream2);
+```
+
+### Pattern 2: Combine → Process
+
+Combine first, then process:
+
+```javascript
+const merged = merge([data1, data2, data3]);
+
+const pipeline = new Pipeline()
+  .filter(x => x % 2 === 0)
+  .take(10);
+
+const result = pipeline.toArray(merged);
+```
+
+### Real-World Example: Finding Common Active Users
+
+```javascript
+// Get active users from both datasets
+const activeInA = new Pipeline()
+  .filter(user => user.active)
+  .map(user => user.id)
+  .toArray(usersA);
+
+const activeInB = new Pipeline()
+  .filter(user => user.active)
+  .map(user => user.id)
+  .toArray(usersB);
+
+// Find users active in both systems
+const activeInBoth = intersection(activeInA, activeInB);
+```
+
+For more patterns and examples, see the [Hybrid Composition Guide](../HYBRID_COMPOSITION.md).
+
+---
+
 ## Next Steps
 
-- Check out the [Migration Guide](./MIGRATION.md) for converting from array methods
-- See [Performance Benchmarks](./BENCHMARKS.md) for detailed comparisons
+- Check out the [Hybrid Composition Guide](../HYBRID_COMPOSITION.md) for combining transducers with multi-input operations
+- See the [Migration Guide](./MIGRATION.md) for converting from array methods
 - Read the [Main README](../../README.md) for project overview
 
 ---
