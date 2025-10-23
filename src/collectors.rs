@@ -3,7 +3,7 @@
 //! Collectors are reducing functions that consume the output of a transducer
 //! and produce a final result.
 
-use crate::step::{cont, is_stopped, Step};
+use crate::step::{cont, Step};
 use crate::transducer::Transducer;
 
 /// Execute a transducer over an iterator and collect results into a vector.
@@ -33,11 +33,12 @@ where
     let mut result = Vec::new();
 
     for item in source {
-        let step = transformed(result, item);
-        let is_stop = is_stopped(&step);
-        result = step.unwrap();
-        if is_stop {
-            break;
+        match transformed(result, item) {
+            Step::Continue(new_result) => result = new_result,
+            Step::Stop(final_result) => {
+                result = final_result;
+                break;
+            }
         }
     }
 
@@ -74,11 +75,12 @@ where
     let mut acc = initial;
 
     for item in source {
-        let step = transformed(acc, item);
-        let is_stop = is_stopped(&step);
-        acc = step.unwrap();
-        if is_stop {
-            break;
+        match transformed(acc, item) {
+            Step::Continue(new_acc) => acc = new_acc,
+            Step::Stop(final_acc) => {
+                acc = final_acc;
+                break;
+            }
         }
     }
 
