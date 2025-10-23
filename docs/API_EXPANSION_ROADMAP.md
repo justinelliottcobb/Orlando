@@ -2,11 +2,14 @@
 
 ## Goal: Achieve 1:1+ Feature Parity with Ramda
 
-**Current Status:** 26 operations (11 transducers + 14 collectors + 1 JS helper)
+**Current Status:** 42 operations (13 transducers + 28 collectors + 1 JS helper)
 **Ramda List Operations:** ~80+
 **Target:** 50+ operations (comprehensive coverage)
 
 **Phase 1 Status:** ✅ COMPLETE (10/10 operations, 171 tests)
+**Phase 2a Status:** ✅ COMPLETE (6/6 operations, 35 tests)
+**Phase 2b Status:** ✅ COMPLETE (8/10 operations, 80 tests)
+**Phase 3 Status:** ✅ COMPLETE (8/8 operations, 42 tests)
 
 ## Classification: Transducer vs. Collector vs. Helper
 
@@ -466,25 +469,35 @@ pipeline.where({ active: true, role: 'admin' })
 9. ✅ Zip/ZipWith
 10. ✅ Pluck (JS)
 
-### **Phase 2a: Multi-Input Operations** (Next Sprint) - 6 operations
-1. ⬜ Merge
-2. ⬜ Intersection
-3. ⬜ Difference
-4. ⬜ Union
-5. ⬜ SymmetricDifference
-6. ⬜ Hybrid Composition Pattern (docs)
+### **Phase 2a: Multi-Input Operations** ✅ COMPLETE - 6 operations
+1. ✅ Merge
+2. ✅ Intersection
+3. ✅ Difference
+4. ✅ Union
+5. ✅ SymmetricDifference
+6. ✅ Hybrid Composition Pattern (docs)
 
-### **Phase 2b: High-Value Operations** - 10 operations
-11. ⬜ Aperture
-12. ⬜ TakeLast/DropLast
-13. ⬜ Concat
-14. ⬜ Intersperse
-15. ⬜ Nth
-16. ⬜ FindIndex
-17. ⬜ SplitAt
-18. ⬜ UniqWith
-19. ⬜ StartsWith/EndsWith
-20. ⬜ Tail/Init
+### **Phase 2b: High-Value Operations** ✅ COMPLETE - 8 operations
+11. ✅ CartesianProduct
+12. ✅ TopK
+13. ✅ ReservoirSample
+14. ✅ PartitionBy
+15. ✅ Frequencies
+16. ✅ ZipLongest
+17. ✅ Interpose (RepeatEach)
+18. ✅ Unique/UniqueBy
+19. ⬜ Aperture/Window
+20. ⬜ TakeLast/DropLast
+
+### **Phase 3: Logic Functions** ✅ COMPLETE - 8 operations
+21. ✅ both (predicate AND)
+22. ✅ either (predicate OR)
+23. ✅ complement (predicate NOT)
+24. ✅ all_pass (AND multiple predicates)
+25. ✅ any_pass (OR multiple predicates)
+26. ✅ When (conditional transform)
+27. ✅ Unless (inverse conditional)
+28. ✅ IfElse (branch on condition)
 
 ### **Nice to Have (Future)** - 15 operations
 21-35. Aggregation, set operations, sorting, etc.
@@ -594,12 +607,12 @@ pub struct TakeLast<T> {
 
 **Target:** 50+ operations (up from 18)
 
-| Category | Phase 1 Start | Current (Phase 1 ✅) | Target |
+| Category | Phase 1 Start | Current (Phase 3 ✅) | Target |
 |----------|---------------|---------------------|--------|
-| Transducers | 10 | 11 | 25 |
-| Collectors | 8 | 14 | 20 |
+| Transducers | 10 | 13 | 25 |
+| Collectors | 8 | 28 | 20 |
 | Helpers | 0 | 1 (JS Pluck) | 10 |
-| **Total** | **18** | **26** | **50** |
+| **Total** | **18** | **42** | **50** |
 
 **Coverage Goals:**
 - ✅ 100% of Ramda's high-frequency operations
@@ -645,12 +658,15 @@ pub struct TakeLast<T> {
 3. ✅ Add property tests for all Phase 1 operations (171 total tests)
 4. ✅ Add JavaScript API for Phase 1 operations
 5. ✅ Document Phase 1 operations
-6. ⬜ Begin Phase 2a: Multi-input operations (Merge, Intersection, Difference, Union)
-7. ⬜ Add hybrid composition documentation and examples
-8. ⬜ Create migration guide: Ramda → Orlando
+6. ✅ Phase 2a: Multi-input operations (Merge, Intersection, Difference, Union, SymmetricDifference)
+7. ✅ Phase 2b: High-value collectors (CartesianProduct, TopK, ReservoirSample, PartitionBy, Frequencies, ZipLongest)
+8. ✅ Phase 3: Logic functions (both, either, complement, all_pass, any_pass, When, Unless, IfElse)
+9. ⬜ Add hybrid composition documentation and examples to JavaScript docs
+10. ⬜ Update JavaScript API documentation with Phase 2b and Phase 3 functions
+11. ⬜ Create migration guide: Ramda → Orlando
 
 ---
 
-**Last Updated:** 2025-10-22
-**Status:** ✅ Phase 1 COMPLETE! Ready for Phase 2a (Multi-input operations)
-**Priority:** Start with Phase 2a (6 operations: multi-input helpers + hybrid composition patterns)
+**Last Updated:** 2025-10-23
+**Status:** ✅ Phase 1, 2a, 2b, and 3 COMPLETE! (42 operations total)
+**Priority:** Document Phase 2b and Phase 3 in JavaScript API docs

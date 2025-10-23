@@ -759,6 +759,452 @@ For more patterns and examples, see the [Hybrid Composition Guide](../HYBRID_COM
 
 ---
 
+## Advanced Collectors
+
+Orlando provides specialized collector functions for complex data analysis and aggregation.
+
+### `frequencies(array)`
+
+Counts occurrences of each element in the array.
+
+```typescript
+frequencies(array: Array<T>): Map<T, number>
+```
+
+**Example:**
+```javascript
+import { frequencies } from 'orlando-transducers';
+
+const data = ['apple', 'banana', 'apple', 'cherry', 'banana', 'apple'];
+const counts = frequencies(data);
+
+// counts: Map {
+//   'apple' => 3,
+//   'banana' => 2,
+//   'cherry' => 1
+// }
+```
+
+**With pipeline:**
+```javascript
+const pipeline = new Pipeline()
+  .filter(word => word.length > 5)
+  .map(word => word.toLowerCase());
+
+const words = pipeline.toArray(text.split(' '));
+const wordCounts = frequencies(words);
+```
+
+**Use cases:**
+- Word frequency analysis
+- Event counting
+- Distribution analysis
+- Histogram generation
+
+---
+
+### `partitionBy(array, keyFn)`
+
+Splits array into consecutive groups where keyFn returns the same value.
+
+```typescript
+partitionBy<T, K>(array: Array<T>, keyFn: (value: T) => K): Array<Array<T>>
+```
+
+**Example:**
+```javascript
+import { partitionBy } from 'orlando-transducers';
+
+const numbers = [1, 1, 2, 3, 3, 3, 4, 5, 5];
+const groups = partitionBy(numbers, x => x);
+// groups: [[1, 1], [2], [3, 3, 3], [4], [5, 5]]
+
+const data = [
+  { type: 'A', value: 1 },
+  { type: 'A', value: 2 },
+  { type: 'B', value: 3 },
+  { type: 'B', value: 4 }
+];
+const byType = partitionBy(data, item => item.type);
+// byType: [[{type:'A', value:1}, {type:'A', value:2}],
+//          [{type:'B', value:3}, {type:'B', value:4}]]
+```
+
+**Use cases:**
+- Grouping consecutive similar items
+- Run-length encoding
+- Chunking by property changes
+- Log file analysis
+
+---
+
+### `topK(array, k, [compareFn])`
+
+Returns the k largest elements (maintains relative order).
+
+```typescript
+topK<T>(array: Array<T>, k: number, compareFn?: (a: T, b: T) => number): Array<T>
+```
+
+**Example:**
+```javascript
+import { topK } from 'orlando-transducers';
+
+const scores = [85, 92, 78, 95, 88, 72, 99, 81];
+const topThree = topK(scores, 3);
+// topThree: [99, 95, 92]
+
+// Custom comparison
+const users = [
+  { name: 'Alice', score: 85 },
+  { name: 'Bob', score: 92 },
+  { name: 'Charlie', score: 88 }
+];
+const topUsers = topK(users, 2, (a, b) => a.score - b.score);
+// topUsers: [{name: 'Bob', score: 92}, {name: 'Charlie', score: 88}]
+```
+
+**Use cases:**
+- Leaderboards
+- Top performers
+- High scores
+- Best matches
+
+---
+
+### `reservoirSample(array, k)`
+
+Random sampling with uniform probability (reservoir sampling algorithm).
+
+```typescript
+reservoirSample<T>(array: Array<T>, k: number): Array<T>
+```
+
+**Example:**
+```javascript
+import { reservoirSample } from 'orlando-transducers';
+
+const largeDataset = Array.from({ length: 10000 }, (_, i) => i);
+const sample = reservoirSample(largeDataset, 100);
+// sample: 100 randomly selected items with uniform probability
+```
+
+**Use cases:**
+- Statistical sampling
+- Random selection from large datasets
+- A/B testing
+- Data subset creation
+
+---
+
+### `cartesianProduct(arrayA, arrayB)`
+
+Returns all possible pairs from two arrays.
+
+```typescript
+cartesianProduct<T, U>(arrayA: Array<T>, arrayB: Array<U>): Array<[T, U]>
+```
+
+**Example:**
+```javascript
+import { cartesianProduct } from 'orlando-transducers';
+
+const colors = ['red', 'blue'];
+const sizes = ['S', 'M', 'L'];
+
+const combinations = cartesianProduct(colors, sizes);
+// combinations: [
+//   ['red', 'S'], ['red', 'M'], ['red', 'L'],
+//   ['blue', 'S'], ['blue', 'M'], ['blue', 'L']
+// ]
+```
+
+**Use cases:**
+- Product variant generation
+- Combinatorial analysis
+- Test case generation
+- Grid coordinates
+
+---
+
+### `zipLongest(arrayA, arrayB, [fillValue])`
+
+Like zip, but continues until the longer array is exhausted, filling missing values.
+
+```typescript
+zipLongest<T, U>(arrayA: Array<T>, arrayB: Array<U>, fillValue?: any): Array<[T | any, U | any]>
+```
+
+**Example:**
+```javascript
+import { zipLongest } from 'orlando-transducers';
+
+const a = [1, 2, 3];
+const b = ['a', 'b'];
+
+const result = zipLongest(a, b, null);
+// result: [[1, 'a'], [2, 'b'], [3, null]]
+
+const result2 = zipLongest(a, b, undefined);
+// result2: [[1, 'a'], [2, 'b'], [3, undefined]]
+```
+
+**Use cases:**
+- Handling arrays of different lengths
+- Data alignment
+- Missing value handling
+- Table formatting
+
+---
+
+## Logic Functions
+
+Orlando provides predicate combinators and conditional transducers for cleaner, more declarative conditional logic in pipelines.
+
+### Predicate Combinators
+
+Predicate combinators allow you to build complex predicates from simple building blocks.
+
+#### `both(pred1, pred2)`
+
+Combines two predicates with AND logic.
+
+```typescript
+both<T>(pred1: (value: T) => boolean, pred2: (value: T) => boolean): (value: T) => boolean
+```
+
+**Example:**
+```javascript
+import { both } from 'orlando-transducers';
+
+const isPositive = x => x > 0;
+const isEven = x => x % 2 === 0;
+const isPositiveEven = both(isPositive, isEven);
+
+const pipeline = new Pipeline()
+  .filter(isPositiveEven);
+
+pipeline.toArray([-2, -1, 0, 1, 2, 3, 4]); // [2, 4]
+```
+
+**Use cases:**
+- Combining multiple conditions
+- Complex validation rules
+- Multi-criteria filtering
+
+---
+
+#### `either(pred1, pred2)`
+
+Combines two predicates with OR logic.
+
+```typescript
+either<T>(pred1: (value: T) => boolean, pred2: (value: T) => boolean): (value: T) => boolean
+```
+
+**Example:**
+```javascript
+import { either } from 'orlando-transducers';
+
+const isSmall = x => x < 10;
+const isLarge = x => x > 100;
+const isExtreme = either(isSmall, isLarge);
+
+const pipeline = new Pipeline()
+  .filter(isExtreme);
+
+pipeline.toArray([5, 50, 150]); // [5, 150]
+```
+
+---
+
+#### `complement(predicate)`
+
+Negates a predicate (returns the opposite).
+
+```typescript
+complement<T>(pred: (value: T) => boolean): (value: T) => boolean
+```
+
+**Example:**
+```javascript
+import { complement } from 'orlando-transducers';
+
+const isEven = x => x % 2 === 0;
+const isOdd = complement(isEven);
+
+const pipeline = new Pipeline()
+  .filter(isOdd);
+
+pipeline.toArray([1, 2, 3, 4, 5]); // [1, 3, 5]
+```
+
+---
+
+#### `allPass(predicates)`
+
+Returns true only if ALL predicates pass (short-circuits on first false).
+
+```typescript
+allPass<T>(predicates: Array<(value: T) => boolean>): (value: T) => boolean
+```
+
+**Example:**
+```javascript
+import { allPass } from 'orlando-transducers';
+
+const validUser = allPass([
+  user => user.age >= 18,
+  user => user.email.includes('@'),
+  user => user.verified === true,
+  user => user.active === true
+]);
+
+const pipeline = new Pipeline()
+  .filter(validUser);
+
+const valid = pipeline.toArray(users);
+```
+
+**Use cases:**
+- Multi-criteria validation
+- Complex rule checking
+- Access control
+- Data quality checks
+
+---
+
+#### `anyPass(predicates)`
+
+Returns true if ANY predicate passes (short-circuits on first true).
+
+```typescript
+anyPass<T>(predicates: Array<(value: T) => boolean>): (value: T) => boolean
+```
+
+**Example:**
+```javascript
+import { anyPass } from 'orlando-transducers';
+
+const isSpecial = anyPass([
+  x => x === 0,
+  x => x % 10 === 0,
+  x => x > 1000
+]);
+
+const pipeline = new Pipeline()
+  .filter(isSpecial);
+
+pipeline.toArray([0, 5, 50, 1500, 7]); // [0, 50, 1500]
+```
+
+---
+
+### Conditional Transducers
+
+Conditional transducers apply transformations based on predicates, allowing you to branch logic within a pipeline.
+
+#### `When(predicate, transform)`
+
+Applies transform only when predicate is true. Otherwise, value passes through unchanged.
+
+**Note:** When is a transducer class that needs to be instantiated and used with collectors.
+
+**Example:**
+```javascript
+import { When, toArray } from 'orlando-transducers';
+
+const doubleIfPositive = new When(
+  x => x > 0,
+  x => x * 2
+);
+
+const result = toArray(doubleIfPositive, [-1, 2, -3, 4]);
+// result: [-1, 4, -3, 8]
+```
+
+**Use cases:**
+- Conditional normalization
+- Selective transformation
+- Data correction
+- Format conversion
+
+---
+
+#### `Unless(predicate, transform)`
+
+Applies transform only when predicate is false. Inverse of When.
+
+**Example:**
+```javascript
+import { Unless, toArray } from 'orlando-transducers';
+
+const zeroIfNegative = new Unless(
+  x => x > 0,
+  _ => 0
+);
+
+const result = toArray(zeroIfNegative, [-1, 2, -3, 4]);
+// result: [0, 2, 0, 4]
+```
+
+---
+
+#### `IfElse(predicate, onTrue, onFalse)`
+
+Branches on condition - applies different transforms based on predicate.
+
+**Example:**
+```javascript
+import { IfElse, toArray } from 'orlando-transducers';
+
+const normalize = new IfElse(
+  x => x >= 0,
+  x => x * 2,      // double if positive
+  x => x / 2       // halve if negative
+);
+
+const result = toArray(normalize, [-4, 3, -6, 5]);
+// result: [-2, 6, -3, 10]
+```
+
+**Use cases:**
+- Two-way data transformation
+- A/B processing
+- Type-based handling
+- Status-dependent logic
+
+---
+
+### Composing Logic Functions
+
+Logic functions compose beautifully for complex conditional logic:
+
+```javascript
+import { both, either, complement, allPass, When } from 'orlando-transducers';
+
+// Complex predicate composition
+const isPositiveEven = both(x => x > 0, x => x % 2 === 0);
+const isNegativeOdd = both(x => x < 0, complement(x => x % 2 === 0));
+const isSpecial = either(isPositiveEven, isNegativeOdd);
+
+const pipeline = new Pipeline()
+  .filter(isSpecial)
+  .map(x => x * 10);
+
+// Nested logic with When
+const complexTransform = new When(
+  allPass([
+    x => x > 0,
+    x => x < 100,
+    x => x % 2 === 0
+  ]),
+  x => x * 2
+);
+```
+
+---
+
 ## Next Steps
 
 - Check out the [Hybrid Composition Guide](../HYBRID_COMPOSITION.md) for combining transducers with multi-input operations

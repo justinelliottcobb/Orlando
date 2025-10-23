@@ -143,6 +143,11 @@ All methods return a new `Pipeline` instance, allowing for fluent method chainin
 | `drop(n)` | Skip first n elements | `.drop(5)` |
 | `dropWhile(predicate)` | Skip while predicate is true | `.dropWhile(x => x < 10)` |
 | `tap(fn)` | Execute side effects without modifying values | `.tap(x => console.log(x))` |
+| `flatMap(fn)` | Transform and flatten nested arrays | `.flatMap(x => [x, x * 2])` |
+| `reject(predicate)` | Remove matching elements (inverse of filter) | `.reject(x => x < 0)` |
+| `chunk(n)` | Group elements into chunks of size n | `.chunk(3)` |
+| `unique()` | Remove consecutive duplicates | `.unique()` |
+| `scan(fn, initial)` | Accumulate with intermediate results | `.scan((a, b) => a + b, 0)` |
 
 ### Terminal Operations (Collectors)
 
@@ -152,6 +157,40 @@ These execute the pipeline and return a result:
 |--------|-------------|---------|
 | `toArray(source)` | Collect results into an array | `pipeline.toArray(data)` |
 | `reduce(source, reducer, initial)` | Custom reduction | `pipeline.reduce(data, (a,b) => a+b, 0)` |
+| `find(source, predicate)` | Find first matching element | `find(pipeline, data, x => x > 10)` |
+| `partition(source, predicate)` | Split into [matching, non-matching] | `partition(pipeline, data, isValid)` |
+| `groupBy(source, keyFn)` | Group elements by key function | `groupBy(pipeline, data, x => x.type)` |
+| `frequencies(source)` | Count occurrences of each element | `frequencies(data)` |
+| `topK(source, k)` | Get k largest elements | `topK(scores, 10)` |
+
+### Logic Functions
+
+Predicate combinators and conditional transformations for cleaner conditional logic:
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `both(p1, p2)` | Combine predicates with AND | `both(isPositive, isEven)` |
+| `either(p1, p2)` | Combine predicates with OR | `either(isSmall, isLarge)` |
+| `complement(pred)` | Negate a predicate | `complement(isEven)` |
+| `allPass(predicates)` | All predicates must pass | `allPass([isValid, isActive])` |
+| `anyPass(predicates)` | Any predicate must pass | `anyPass([isZero, isDivisibleBy10])` |
+| `When(pred, fn)` | Transform only when predicate is true | `new When(x => x > 0, x => x * 2)` |
+| `Unless(pred, fn)` | Transform only when predicate is false | `new Unless(x => x > 0, _ => 0)` |
+| `IfElse(pred, onTrue, onFalse)` | Branch on condition | `new IfElse(x => x >= 0, double, halve)` |
+
+### Multi-Input Operations
+
+Operations for combining and comparing multiple arrays:
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `merge(arrays)` | Interleave multiple arrays | `merge([a, b, c])` |
+| `zip(a, b)` | Combine into pairs | `zip([1,2], ['a','b'])` |
+| `zipLongest(a, b, fill)` | Zip with fill for different lengths | `zipLongest(a, b, null)` |
+| `intersection(a, b)` | Elements in both arrays | `intersection(a, b)` |
+| `union(a, b)` | Unique elements from both | `union(a, b)` |
+| `difference(a, b)` | Elements in a but not b | `difference(a, b)` |
+| `cartesianProduct(a, b)` | All possible pairs | `cartesianProduct(colors, sizes)` |
 
 **Full API documentation:** [docs/api/JAVASCRIPT.md](docs/api/JAVASCRIPT.md)
 
