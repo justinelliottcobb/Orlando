@@ -117,3 +117,172 @@ fn test_wasm_simd_operations() {
     let result = mul_f64_simd(&a, &b);
     assert_eq!(result, vec![2.0, 6.0, 12.0, 20.0]);
 }
+
+// Pipeline API tests (JavaScript interop)
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_basic() {
+    use js_sys::{Array, Function};
+    use orlando::Pipeline;
+
+    let pipeline = Pipeline::new();
+
+    // Test that pipeline can be created
+    let source = Array::new();
+    source.push(&1.into());
+    source.push(&2.into());
+    source.push(&3.into());
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 3);
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_map() {
+    use js_sys::{Array, Function};
+    use orlando::Pipeline;
+
+    let pipeline = Pipeline::new();
+    let map_fn = Function::new_with_args("x", "return x * 2");
+    let pipeline = pipeline.map(&map_fn);
+
+    let source = Array::new();
+    source.push(&1.into());
+    source.push(&2.into());
+    source.push(&3.into());
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 3);
+    assert_eq!(result.get(0).as_f64(), Some(2.0));
+    assert_eq!(result.get(1).as_f64(), Some(4.0));
+    assert_eq!(result.get(2).as_f64(), Some(6.0));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_filter() {
+    use js_sys::{Array, Function};
+    use orlando::Pipeline;
+
+    let pipeline = Pipeline::new();
+    let filter_fn = Function::new_with_args("x", "return x % 2 === 0");
+    let pipeline = pipeline.filter(&filter_fn);
+
+    let source = Array::new();
+    source.push(&1.into());
+    source.push(&2.into());
+    source.push(&3.into());
+    source.push(&4.into());
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 2);
+    assert_eq!(result.get(0).as_f64(), Some(2.0));
+    assert_eq!(result.get(1).as_f64(), Some(4.0));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_pluck() {
+    use js_sys::{Array, Object, Reflect};
+    use orlando::Pipeline;
+    use wasm_bindgen::JsValue;
+
+    let pipeline = Pipeline::new();
+    let pipeline = pipeline.pluck("name");
+
+    // Create test objects
+    let source = Array::new();
+
+    let obj1 = Object::new();
+    Reflect::set(&obj1, &"name".into(), &"Alice".into()).unwrap();
+    Reflect::set(&obj1, &"age".into(), &30.into()).unwrap();
+    source.push(&obj1);
+
+    let obj2 = Object::new();
+    Reflect::set(&obj2, &"name".into(), &"Bob".into()).unwrap();
+    Reflect::set(&obj2, &"age".into(), &25.into()).unwrap();
+    source.push(&obj2);
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 2);
+    assert_eq!(result.get(0).as_string(), Some("Alice".to_string()));
+    assert_eq!(result.get(1).as_string(), Some("Bob".to_string()));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_pluck_missing_property() {
+    use js_sys::{Array, Object, Reflect};
+    use orlando::Pipeline;
+    use wasm_bindgen::JsValue;
+
+    let pipeline = Pipeline::new();
+    let pipeline = pipeline.pluck("missing");
+
+    let source = Array::new();
+    let obj = Object::new();
+    Reflect::set(&obj, &"name".into(), &"Alice".into()).unwrap();
+    source.push(&obj);
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 1);
+    assert!(result.get(0).is_undefined());
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_pluck_nested() {
+    use js_sys::{Array, Object, Reflect};
+    use orlando::Pipeline;
+
+    let pipeline = Pipeline::new();
+    let pipeline = pipeline.pluck("value");
+
+    let source = Array::new();
+
+    let obj1 = Object::new();
+    Reflect::set(&obj1, &"value".into(), &10.into()).unwrap();
+    source.push(&obj1);
+
+    let obj2 = Object::new();
+    Reflect::set(&obj2, &"value".into(), &20.into()).unwrap();
+    source.push(&obj2);
+
+    let obj3 = Object::new();
+    Reflect::set(&obj3, &"value".into(), &30.into()).unwrap();
+    source.push(&obj3);
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 3);
+    assert_eq!(result.get(0).as_f64(), Some(10.0));
+    assert_eq!(result.get(1).as_f64(), Some(20.0));
+    assert_eq!(result.get(2).as_f64(), Some(30.0));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_pluck_composition() {
+    use js_sys::{Array, Function, Object, Reflect};
+    use orlando::Pipeline;
+
+    let pipeline = Pipeline::new();
+    let pipeline = pipeline.pluck("age");
+    let filter_fn = Function::new_with_args("x", "return x > 25");
+    let pipeline = pipeline.filter(&filter_fn);
+
+    let source = Array::new();
+
+    let obj1 = Object::new();
+    Reflect::set(&obj1, &"name".into(), &"Alice".into()).unwrap();
+    Reflect::set(&obj1, &"age".into(), &30.into()).unwrap();
+    source.push(&obj1);
+
+    let obj2 = Object::new();
+    Reflect::set(&obj2, &"name".into(), &"Bob".into()).unwrap();
+    Reflect::set(&obj2, &"age".into(), &20.into()).unwrap();
+    source.push(&obj2);
+
+    let obj3 = Object::new();
+    Reflect::set(&obj3, &"name".into(), &"Charlie".into()).unwrap();
+    Reflect::set(&obj3, &"age".into(), &28.into()).unwrap();
+    source.push(&obj3);
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 2); // Only Alice (30) and Charlie (28)
+    assert_eq!(result.get(0).as_f64(), Some(30.0));
+    assert_eq!(result.get(1).as_f64(), Some(28.0));
+}

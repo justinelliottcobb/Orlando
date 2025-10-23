@@ -638,11 +638,63 @@ mod tests {
     }
 
     #[test]
+    fn test_none_empty() {
+        use crate::transducer::Identity;
+        let id = Identity::<i32>::new();
+        assert!(none(&id, vec![], |_x| true)); // Empty collection = none match
+    }
+
+    #[test]
+    fn test_none_with_transducer() {
+        use crate::transforms::Map;
+        let pipeline = Map::new(|x: i32| x * 2);
+        assert!(none(&pipeline, vec![1, 2, 3], |x| *x > 10));
+        assert!(!none(&pipeline, vec![1, 2, 6], |x| *x > 10)); // 6*2 = 12 > 10
+    }
+
+    #[test]
+    fn test_none_all_match() {
+        use crate::transducer::Identity;
+        let id = Identity::<i32>::new();
+        // None should return false when all elements match
+        assert!(!none(&id, vec![2, 4, 6, 8], |x| x % 2 == 0));
+    }
+
+    #[test]
     fn test_contains() {
         use crate::transducer::Identity;
         let id = Identity::<i32>::new();
         assert!(contains(&id, vec![1, 2, 3, 4, 5], &3));
         assert!(!contains(&id, vec![1, 2, 4, 5], &3));
+    }
+
+    #[test]
+    fn test_contains_empty() {
+        use crate::transducer::Identity;
+        let id = Identity::<i32>::new();
+        assert!(!contains(&id, vec![], &42));
+    }
+
+    #[test]
+    fn test_contains_first_element() {
+        use crate::transducer::Identity;
+        let id = Identity::<i32>::new();
+        assert!(contains(&id, vec![1, 2, 3], &1));
+    }
+
+    #[test]
+    fn test_contains_last_element() {
+        use crate::transducer::Identity;
+        let id = Identity::<i32>::new();
+        assert!(contains(&id, vec![1, 2, 3, 4, 5], &5));
+    }
+
+    #[test]
+    fn test_contains_with_transducer() {
+        use crate::transforms::Map;
+        let pipeline = Map::new(|x: i32| x * 2);
+        assert!(contains(&pipeline, vec![1, 2, 3], &4)); // 2 * 2 = 4
+        assert!(!contains(&pipeline, vec![1, 2, 3], &5)); // No element maps to 5
     }
 
     #[test]

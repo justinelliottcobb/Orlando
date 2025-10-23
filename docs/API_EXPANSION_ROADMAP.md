@@ -2,9 +2,11 @@
 
 ## Goal: Achieve 1:1+ Feature Parity with Ramda
 
-**Current Status:** 18 operations (10 transducers + 8 collectors)
+**Current Status:** 26 operations (11 transducers + 14 collectors + 1 JS helper)
 **Ramda List Operations:** ~80+
 **Target:** 50+ operations (comprehensive coverage)
+
+**Phase 1 Status:** ✅ COMPLETE (10/10 operations, 171 tests)
 
 ## Classification: Transducer vs. Collector vs. Helper
 
@@ -148,7 +150,93 @@ pub fn none<T, U, Iter, P>(
 
 ---
 
-## Phase 2: High-Value Operations (10 operations)
+## Phase 2a: Multi-Input Operations & Hybrid Composition (6 operations)
+
+### **Priority: HIGH** - Extend beyond single-input transducer model
+
+**Architectural Innovation:** Phase 1's Zip/ZipWith revealed that Orlando benefits from supporting operations outside the single-input transducer model. These multi-input helpers enable powerful hybrid compositions.
+
+#### 1. **Merge** (Helper) ⭐⭐⭐
+```rust
+pub fn merge<T>(streams: Vec<impl Iterator<Item = T>>) -> Vec<T>
+// Interleave multiple streams
+// [1,2,3] + [4,5,6] -> [1,4,2,5,3,6]
+```
+
+**Why critical:** Round-robin combination of multiple data sources.
+
+**Hybrid Composition:**
+```rust
+// Pre-process streams, then merge
+let stream_a = Map::new(|x: i32| x * 2);
+let stream_b = Filter::new(|x: &i32| x % 2 == 0);
+
+let a_processed = to_vec(&stream_a, 1..10);
+let b_processed = to_vec(&stream_b, 1..20);
+let result = merge(vec![a_processed.into_iter(), b_processed.into_iter()]);
+```
+
+#### 2. **Intersection** (Helper) ⭐⭐⭐
+```rust
+pub fn intersection<T: Eq + Hash>(a: Vec<T>, b: Vec<T>) -> Vec<T>
+// Set intersection - elements in both A and B
+// [1,2,3,4] ∩ [3,4,5,6] -> [3,4]
+```
+
+**Why critical:** Common set operation, useful for filtering by membership.
+
+#### 3. **Difference** (Helper) ⭐⭐
+```rust
+pub fn difference<T: Eq + Hash>(a: Vec<T>, b: Vec<T>) -> Vec<T>
+// Set difference - elements in A but not B
+// [1,2,3,4] - [3,4,5,6] -> [1,2]
+```
+
+**Why important:** Exclusion filtering, data reconciliation.
+
+#### 4. **Union** (Helper) ⭐⭐
+```rust
+pub fn union<T: Eq + Hash>(a: Vec<T>, b: Vec<T>) -> Vec<T>
+// Set union - unique elements from both A and B
+// [1,2,3] ∪ [3,4,5] -> [1,2,3,4,5]
+```
+
+**Why important:** Combine unique elements from multiple sources.
+
+#### 5. **SymmetricDifference** (Helper) ⭐
+```rust
+pub fn symmetric_difference<T: Eq + Hash>(a: Vec<T>, b: Vec<T>) -> Vec<T>
+// Elements in A or B but not both
+// [1,2,3,4] ⊕ [3,4,5,6] -> [1,2,5,6]
+```
+
+**Why useful:** Find non-overlapping elements.
+
+#### 6. **Hybrid Composition Pattern** (Documentation) ⭐⭐⭐
+Document the pattern of composing transducers with multi-input helpers:
+
+```rust
+// Pattern 1: Process then combine
+let pipeline_a = Map::new(|x: i32| x * 2)
+    .compose(Filter::new(|x: &i32| *x > 5));
+let pipeline_b = Map::new(|x: i32| x + 10);
+
+let a_results = to_vec(&pipeline_a, 1..20);
+let b_results = to_vec(&pipeline_b, 1..10);
+let combined = intersection(a_results, b_results);
+
+// Pattern 2: Combine then process
+let merged = merge(vec![stream1, stream2]);
+let pipeline = Filter::new(|x: &i32| *x % 2 == 0)
+    .compose(Take::new(10));
+let result = to_vec(&pipeline, merged);
+```
+
+**Why critical:** Demonstrates Orlando's flexibility - transducers where they fit, helpers where they don't.
+
+---
+
+## Phase 2b: High-Value Operations (10 operations)
 
 ### **Priority: MEDIUM** - Commonly used utilities
 
@@ -366,7 +454,7 @@ pipeline.where({ active: true, role: 'admin' })
 
 ## Implementation Priorities
 
-### **Must Have (Start Here)** - 10 operations
+### **Phase 1: Must Have** ✅ COMPLETE - 10 operations
 1. ✅ FlatMap
 2. ✅ Partition
 3. ✅ Find
@@ -378,17 +466,25 @@ pipeline.where({ active: true, role: 'admin' })
 9. ✅ Zip/ZipWith
 10. ✅ Pluck (JS)
 
-### **Should Have (Next Sprint)** - 10 operations
-11. Aperture
-12. TakeLast/DropLast
-13. Concat
-14. Intersperse
-15. Nth
-16. FindIndex
-17. SplitAt
-18. UniqWith
-19. StartsWith/EndsWith
-20. Tail/Init
+### **Phase 2a: Multi-Input Operations** (Next Sprint) - 6 operations
+1. ⬜ Merge
+2. ⬜ Intersection
+3. ⬜ Difference
+4. ⬜ Union
+5. ⬜ SymmetricDifference
+6. ⬜ Hybrid Composition Pattern (docs)
+
+### **Phase 2b: High-Value Operations** - 10 operations
+11. ⬜ Aperture
+12. ⬜ TakeLast/DropLast
+13. ⬜ Concat
+14. ⬜ Intersperse
+15. ⬜ Nth
+16. ⬜ FindIndex
+17. ⬜ SplitAt
+18. ⬜ UniqWith
+19. ⬜ StartsWith/EndsWith
+20. ⬜ Tail/Init
 
 ### **Nice to Have (Future)** - 15 operations
 21-35. Aggregation, set operations, sorting, etc.
@@ -498,12 +594,12 @@ pub struct TakeLast<T> {
 
 **Target:** 50+ operations (up from 18)
 
-| Category | Current | Target |
-|----------|---------|--------|
-| Transducers | 10 | 25 |
-| Collectors | 8 | 20 |
-| Helpers | 0 | 5 |
-| **Total** | **18** | **50** |
+| Category | Phase 1 Start | Current (Phase 1 ✅) | Target |
+|----------|---------------|---------------------|--------|
+| Transducers | 10 | 11 | 25 |
+| Collectors | 8 | 14 | 20 |
+| Helpers | 0 | 1 (JS Pluck) | 10 |
+| **Total** | **18** | **26** | **50** |
 
 **Coverage Goals:**
 - ✅ 100% of Ramda's high-frequency operations
@@ -545,15 +641,16 @@ pub struct TakeLast<T> {
 ## Next Steps
 
 1. ✅ Create this roadmap
-2. ⬜ Implement Phase 1, Operation 1: FlatMap
-3. ⬜ Add property tests for FlatMap
-4. ⬜ Add JavaScript API for FlatMap
-5. ⬜ Document FlatMap
-6. ⬜ Repeat for remaining Phase 1 operations
-7. ⬜ Create migration guide: Ramda → Orlando
+2. ✅ Implement all Phase 1 operations (10/10)
+3. ✅ Add property tests for all Phase 1 operations (171 total tests)
+4. ✅ Add JavaScript API for Phase 1 operations
+5. ✅ Document Phase 1 operations
+6. ⬜ Begin Phase 2a: Multi-input operations (Merge, Intersection, Difference, Union)
+7. ⬜ Add hybrid composition documentation and examples
+8. ⬜ Create migration guide: Ramda → Orlando
 
 ---
 
-**Last Updated:** 2025-01-22
-**Status:** Planning phase complete, ready for implementation
-**Priority:** Start with Phase 1 (10 critical operations)
+**Last Updated:** 2025-10-22
+**Status:** ✅ Phase 1 COMPLETE! Ready for Phase 2a (Multi-input operations)
+**Priority:** Start with Phase 2a (6 operations: multi-input helpers + hybrid composition patterns)
