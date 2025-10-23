@@ -3,7 +3,7 @@
 //! This module provides a fluent API for building transducer pipelines
 //! that can be called from JavaScript via WASM.
 
-use js_sys::{Array, Function};
+use js_sys::{Array, Function, Reflect};
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use web_sys::console;
@@ -215,6 +215,38 @@ impl Pipeline {
             let this = JsValue::null();
             let _ = f.call1(&this, val);
         })));
+        Pipeline { operations: ops }
+    }
+
+    /// Extract a property from each object (JavaScript convenience).
+    ///
+    /// This is cleaner than `.map(x => x.propertyName)` for extracting properties.
+    ///
+    /// # Arguments
+    ///
+    /// * `property_name` - The name of the property to extract
+    ///
+    /// # Examples (JavaScript)
+    ///
+    /// ```javascript
+    /// const users = [
+    ///   { name: 'Alice', age: 30 },
+    ///   { name: 'Bob', age: 25 }
+    /// ];
+    /// const names = new Pipeline().pluck('name').toArray(users);
+    /// // names: ['Alice', 'Bob']
+    /// ```
+    #[wasm_bindgen]
+    pub fn pluck(&self, property_name: &str) -> Pipeline {
+        let prop_key = JsValue::from_str(property_name);
+        let mut ops = self.operations.clone();
+
+        let map_fn = Rc::new(move |val: JsValue| -> JsValue {
+            // Use Reflect.get to extract the property
+            Reflect::get(&val, &prop_key).unwrap_or(JsValue::undefined())
+        }) as Rc<dyn Fn(JsValue) -> JsValue>;
+
+        ops.push(Operation::Map(map_fn));
         Pipeline { operations: ops }
     }
 
