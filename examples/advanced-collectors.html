@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orlando - Advanced Collectors</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 1000px;
+            margin: 40px auto;
+            padding: 0 20px;
+            line-height: 1.6;
+        }
+        h1 { color: #2c3e50; }
+        h2 { color: #34495e; margin-top: 30px; }
+        .example {
+            background: #f8f9fa;
+            border-left: 4px solid #3498db;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .result {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        pre {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 13px;
+        }
+        code {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+        }
+        .info {
+            background: #cfe2ff;
+            border-left: 4px solid #0d6efd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #3498db;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>📊 Advanced Collectors</h1>
+    <p>Specialized collector functions for complex data analysis and aggregation.</p>
+
+    <div class="example">
+        <h2>Example 1: Frequencies - Word Count Analysis</h2>
+        <p>Count occurrences of each word in a text document.</p>
+        <div id="frequencies-result" class="result"></div>
+        <pre id="frequencies-code"></pre>
+    </div>
+
+    <div class="example">
+        <h2>Example 2: PartitionBy - Group Consecutive Elements</h2>
+        <p>Group data into consecutive runs based on a key function.</p>
+        <div id="partitionby-result" class="result"></div>
+        <pre id="partitionby-code"></pre>
+    </div>
+
+    <div class="example">
+        <h2>Example 3: TopK - Leaderboard</h2>
+        <p>Get the top K highest-scoring players efficiently.</p>
+        <div id="topk-result" class="result"></div>
+        <table id="topk-table">
+            <thead>
+                <tr><th>Rank</th><th>Player</th><th>Score</th></tr>
+            </thead>
+            <tbody id="topk-body"></tbody>
+        </table>
+    </div>
+
+    <div class="example">
+        <h2>Example 4: ReservoirSample - Random Sampling</h2>
+        <p>Uniformly sample from a large dataset using the reservoir sampling algorithm.</p>
+        <div id="reservoir-result" class="result"></div>
+        <div class="info">
+            <strong>Note:</strong> Reservoir sampling provides uniform probability for each element,
+            even when the total size is unknown in advance. Perfect for streaming data!
+        </div>
+    </div>
+
+    <div class="example">
+        <h2>Example 5: CartesianProduct - Product Variants</h2>
+        <p>Generate all possible product combinations (color × size).</p>
+        <div id="cartesian-result" class="result"></div>
+        <pre id="cartesian-code"></pre>
+    </div>
+
+    <div class="example">
+        <h2>Example 6: ZipLongest - Data Alignment</h2>
+        <p>Combine arrays of different lengths, filling missing values.</p>
+        <div id="ziplongest-result" class="result"></div>
+        <pre id="ziplongest-code"></pre>
+    </div>
+
+    <script type="module">
+        // Note: This example assumes the collectors are exported from the WASM module
+        // In the actual implementation, you'll need to ensure these functions are available
+
+        async function runExamples() {
+            console.log('🚀 Starting advanced collectors examples...');
+
+            // Example 1: Frequencies
+            {
+                const text = "the quick brown fox jumps over the lazy dog the fox was quick";
+                const words = text.split(' ');
+
+                // Create frequency map
+                const freq = new Map();
+                words.forEach(word => {
+                    freq.set(word, (freq.get(word) || 0) + 1);
+                });
+
+                // Sort by frequency
+                const sorted = Array.from(freq.entries())
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 5);
+
+                document.getElementById('frequencies-result').innerHTML = `
+                    <strong>Input text:</strong> "${text}"<br>
+                    <strong>Total words:</strong> ${words.length}<br>
+                    <strong>Unique words:</strong> ${freq.size}<br>
+                    <strong>Top 5 words:</strong> ${sorted.map(([word, count]) =>
+                        `${word} (${count}×)`).join(', ')}
+                `;
+
+                document.getElementById('frequencies-code').textContent =
+`// With Orlando frequencies function:
+import { frequencies } from 'orlando-transducers';
+
+const words = text.split(' ');
+const freq = frequencies(words);
+// Returns: Map { 'the' => 3, 'fox' => 2, 'quick' => 2, ... }`;
+            }
+
+            // Example 2: PartitionBy
+            {
+                const data = [
+                    { status: 'pending', id: 1 },
+                    { status: 'pending', id: 2 },
+                    { status: 'active', id: 3 },
+                    { status: 'active', id: 4 },
+                    { status: 'complete', id: 5 },
+                    { status: 'complete', id: 6 },
+                    { status: 'active', id: 7 }
+                ];
+
+                // Group consecutive items by status
+                const groups = [];
+                let currentGroup = [data[0]];
+                for (let i = 1; i < data.length; i++) {
+                    if (data[i].status === data[i-1].status) {
+                        currentGroup.push(data[i]);
+                    } else {
+                        groups.push(currentGroup);
+                        currentGroup = [data[i]];
+                    }
+                }
+                groups.push(currentGroup);
+
+                document.getElementById('partitionby-result').innerHTML = `
+                    <strong>Input:</strong> ${data.length} items with varying statuses<br>
+                    <strong>Groups found:</strong> ${groups.length} consecutive groups<br>
+                    <strong>Group sizes:</strong> ${groups.map(g =>
+                        `${g[0].status}(${g.length})`).join(', ')}
+                `;
+
+                document.getElementById('partitionby-code').textContent =
+`// With Orlando partitionBy:
+import { partitionBy } from 'orlando-transducers';
+
+const groups = partitionBy(data, item => item.status);
+// Returns: [
+//   [{status:'pending',id:1}, {status:'pending',id:2}],
+//   [{status:'active',id:3}, {status:'active',id:4}],
+//   [{status:'complete',id:5}, {status:'complete',id:6}],
+//   [{status:'active',id:7}]
+// ]`;
+            }
+
+            // Example 3: TopK
+            {
+                const players = [
+                    { name: 'Alice', score: 1250 },
+                    { name: 'Bob', score: 2100 },
+                    { name: 'Charlie', score: 950 },
+                    { name: 'Diana', score: 3200 },
+                    { name: 'Eve', score: 1800 },
+                    { name: 'Frank', score: 2700 },
+                    { name: 'Grace', score: 1600 },
+                    { name: 'Henry', score: 2400 },
+                ];
+
+                // Get top 5 players
+                const topPlayers = [...players]
+                    .sort((a, b) => b.score - a.score)
+                    .slice(0, 5);
+
+                document.getElementById('topk-result').innerHTML = `
+                    <strong>Total players:</strong> ${players.length}<br>
+                    <strong>Top 5 displayed below</strong>
+                `;
+
+                const tbody = document.getElementById('topk-body');
+                topPlayers.forEach((player, i) => {
+                    tbody.innerHTML += `
+                        <tr>
+                            <td><strong>#${i + 1}</strong></td>
+                            <td>${player.name}</td>
+                            <td style="color: #2e7d32; font-weight: bold;">${player.score.toLocaleString()}</td>
+                        </tr>
+                    `;
+                });
+            }
+
+            // Example 4: ReservoirSample
+            {
+                const largeDataset = Array.from({ length: 10000 }, (_, i) => i + 1);
+
+                // Reservoir sampling algorithm
+                const k = 10;
+                const reservoir = largeDataset.slice(0, k);
+                for (let i = k; i < largeDataset.length; i++) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    if (j < k) {
+                        reservoir[j] = largeDataset[i];
+                    }
+                }
+                const sample = reservoir.sort((a, b) => a - b);
+
+                document.getElementById('reservoir-result').innerHTML = `
+                    <strong>Dataset size:</strong> ${largeDataset.length.toLocaleString()} elements<br>
+                    <strong>Sample size:</strong> ${k} elements<br>
+                    <strong>Random sample:</strong> ${sample.join(', ')}<br>
+                    <strong>Probability:</strong> Each element has exactly ${k}/${largeDataset.length} = ${(k/largeDataset.length * 100).toFixed(2)}% chance
+                `;
+            }
+
+            // Example 5: CartesianProduct
+            {
+                const colors = ['Red', 'Blue', 'Green'];
+                const sizes = ['S', 'M', 'L', 'XL'];
+
+                // Generate all combinations
+                const combinations = [];
+                for (const color of colors) {
+                    for (const size of sizes) {
+                        combinations.push([color, size]);
+                    }
+                }
+
+                document.getElementById('cartesian-result').innerHTML = `
+                    <strong>Colors:</strong> ${colors.join(', ')}<br>
+                    <strong>Sizes:</strong> ${sizes.join(', ')}<br>
+                    <strong>Total variants:</strong> ${combinations.length} (${colors.length} × ${sizes.length})<br>
+                    <strong>All combinations:</strong> ${combinations.slice(0, 6).map(([c, s]) =>
+                        `${c}/${s}`).join(', ')}...
+                `;
+
+                document.getElementById('cartesian-code').textContent =
+`// With Orlando cartesianProduct:
+import { cartesianProduct } from 'orlando-transducers';
+
+const colors = ['Red', 'Blue', 'Green'];
+const sizes = ['S', 'M', 'L', 'XL'];
+
+const variants = cartesianProduct(colors, sizes);
+// Returns: [
+//   ['Red', 'S'], ['Red', 'M'], ['Red', 'L'], ['Red', 'XL'],
+//   ['Blue', 'S'], ['Blue', 'M'], ...
+// ]`;
+            }
+
+            // Example 6: ZipLongest
+            {
+                const names = ['Alice', 'Bob', 'Charlie'];
+                const scores = [95, 87];
+                const grades = ['A', 'B', 'C', 'D'];
+
+                // Zip with fill value
+                const maxLen = Math.max(names.length, scores.length, grades.length);
+                const zipped = [];
+                for (let i = 0; i < maxLen; i++) {
+                    zipped.push([
+                        names[i] ?? 'N/A',
+                        scores[i] ?? 'N/A',
+                        grades[i] ?? 'N/A'
+                    ]);
+                }
+
+                document.getElementById('ziplongest-result').innerHTML = `
+                    <strong>Arrays:</strong><br>
+                    • Names (${names.length}): ${names.join(', ')}<br>
+                    • Scores (${scores.length}): ${scores.join(', ')}<br>
+                    • Grades (${grades.length}): ${grades.join(', ')}<br>
+                    <strong>Aligned with 'N/A' fill:</strong><br>
+                    ${zipped.map(([n, s, g]) => `[${n}, ${s}, ${g}]`).join('<br>')}
+                `;
+
+                document.getElementById('ziplongest-code').textContent =
+`// With Orlando zipLongest:
+import { zipLongest } from 'orlando-transducers';
+
+const result = zipLongest(names, scores, 'N/A');
+// Fills missing values with 'N/A'
+// Returns: [['Alice', 95], ['Bob', 87], ['Charlie', 'N/A']]`;
+            }
+
+            console.log('✅ All advanced collector examples completed!');
+        }
+
+        runExamples().catch(err => {
+            console.error('❌ Error:', err);
+            document.body.innerHTML += `
+                <div style="background: #f8d7da; color: #721c24; padding: 20px; margin: 20px 0; border-radius: 4px;">
+                    <strong>Error:</strong> ${err.message}
+                </div>
+            `;
+        });
+    </script>
+</body>
+</html>

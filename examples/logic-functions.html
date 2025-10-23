@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orlando - Logic Functions</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 1000px;
+            margin: 40px auto;
+            padding: 0 20px;
+            line-height: 1.6;
+        }
+        h1 { color: #2c3e50; }
+        h2 { color: #34495e; margin-top: 30px; }
+        .example {
+            background: #f8f9fa;
+            border-left: 4px solid #9b59b6;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .result {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        pre {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 13px;
+        }
+        code {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+        }
+        .info {
+            background: #e7f3ff;
+            border-left: 4px solid #2196f3;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .category {
+            background: #fff9e6;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 15px 0;
+            font-weight: bold;
+            color: #856404;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #9b59b6;
+            color: white;
+        }
+        .pass {
+            background: #d4edda;
+            color: #155724;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+        .fail {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧠 Logic Functions</h1>
+    <p>Predicate combinators and conditional transformations for cleaner, more declarative logic.</p>
+
+    <div class="category">PART 1: Predicate Combinators</div>
+
+    <div class="example">
+        <h2>Example 1: both() - AND Logic</h2>
+        <p>Combine two predicates that must both be true.</p>
+        <div id="both-result" class="result"></div>
+        <pre id="both-code"></pre>
+    </div>
+
+    <div class="example">
+        <h2>Example 2: either() - OR Logic</h2>
+        <p>Combine two predicates where at least one must be true.</p>
+        <div id="either-result" class="result"></div>
+        <pre id="either-code"></pre>
+    </div>
+
+    <div class="example">
+        <h2>Example 3: complement() - NOT Logic</h2>
+        <p>Invert a predicate's result.</p>
+        <div id="complement-result" class="result"></div>
+        <pre id="complement-code"></pre>
+    </div>
+
+    <div class="example">
+        <h2>Example 4: allPass() - Multiple AND</h2>
+        <p>All predicates must pass (short-circuits on first false).</p>
+        <div id="allpass-result" class="result"></div>
+        <table id="allpass-table">
+            <thead>
+                <tr><th>User</th><th>Age ≥ 18</th><th>Has Email</th><th>Verified</th><th>Active</th><th>Valid?</th></tr>
+            </thead>
+            <tbody id="allpass-body"></tbody>
+        </table>
+    </div>
+
+    <div class="example">
+        <h2>Example 5: anyPass() - Multiple OR</h2>
+        <p>At least one predicate must pass (short-circuits on first true).</p>
+        <div id="anypass-result" class="result"></div>
+        <pre id="anypass-code"></pre>
+    </div>
+
+    <div class="example">
+        <h2>Example 6: Nested Composition</h2>
+        <p>Build complex predicates by composing simple ones.</p>
+        <div id="nested-result" class="result"></div>
+        <pre id="nested-code"></pre>
+    </div>
+
+    <div class="category">PART 2: Conditional Transducers</div>
+
+    <div class="example">
+        <h2>Example 7: When - Conditional Transform</h2>
+        <p>Apply transformation only when predicate is true, otherwise pass through unchanged.</p>
+        <div id="when-result" class="result"></div>
+        <pre id="when-code"></pre>
+    </div>
+
+    <div class="example">
+        <h2>Example 8: Unless - Inverse Conditional</h2>
+        <p>Apply transformation only when predicate is false.</p>
+        <div id="unless-result" class="result"></div>
+        <pre id="unless-code"></pre>
+    </div>
+
+    <div class="example">
+        <h2>Example 9: IfElse - Branching Logic</h2>
+        <p>Apply different transformations based on a condition.</p>
+        <div id="ifelse-result" class="result"></div>
+        <pre id="ifelse-code"></pre>
+    </div>
+
+    <div class="example">
+        <h2>Example 10: Real-World - User Validation Pipeline</h2>
+        <p>Combining logic functions in a practical data validation scenario.</p>
+        <div id="realworld-result" class="result"></div>
+        <div class="info">
+            <strong>Pipeline Steps:</strong><br>
+            1. Filter users with complex validation (allPass)<br>
+            2. Normalize email addresses conditionally (When)<br>
+            3. Handle edge cases (IfElse)<br>
+            4. Apply role-based transformations
+        </div>
+    </div>
+
+    <script type="module">
+        // Note: These examples demonstrate the logic function concepts
+        // In actual Orlando usage, import from the WASM module
+
+        async function runExamples() {
+            console.log('🧠 Starting logic functions examples...');
+
+            // Example 1: both()
+            {
+                const isPositive = x => x > 0;
+                const isEven = x => x % 2 === 0;
+                const isPositiveEven = x => isPositive(x) && isEven(x);
+
+                const numbers = [-2, -1, 0, 1, 2, 3, 4, 5, 6];
+                const result = numbers.filter(isPositiveEven);
+
+                document.getElementById('both-result').innerHTML = `
+                    <strong>Input:</strong> ${numbers.join(', ')}<br>
+                    <strong>Condition:</strong> isPositive AND isEven<br>
+                    <strong>Output:</strong> ${result.join(', ')}
+                `;
+
+                document.getElementById('both-code').textContent =
+`// With Orlando both():
+import { both } from 'orlando-transducers';
+
+const isPositive = x => x > 0;
+const isEven = x => x % 2 === 0;
+const isPositiveEven = both(isPositive, isEven);
+
+// Use in pipeline
+const pipeline = new Pipeline()
+  .filter(isPositiveEven);
+// Result: [2, 4, 6]`;
+            }
+
+            // Example 2: either()
+            {
+                const isSmall = x => x < 10;
+                const isLarge = x => x > 100;
+                const isExtreme = x => isSmall(x) || isLarge(x);
+
+                const numbers = [5, 25, 50, 75, 150, 200];
+                const result = numbers.filter(isExtreme);
+
+                document.getElementById('either-result').innerHTML = `
+                    <strong>Input:</strong> ${numbers.join(', ')}<br>
+                    <strong>Condition:</strong> isSmall OR isLarge<br>
+                    <strong>Output:</strong> ${result.join(', ')} (< 10 or > 100)
+                `;
+
+                document.getElementById('either-code').textContent =
+`// With Orlando either():
+import { either } from 'orlando-transducers';
+
+const isSmall = x => x < 10;
+const isLarge = x => x > 100;
+const isExtreme = either(isSmall, isLarge);
+
+// Result: [5, 150, 200]`;
+            }
+
+            // Example 3: complement()
+            {
+                const isEven = x => x % 2 === 0;
+                const isOdd = x => !isEven(x);
+
+                const numbers = [1, 2, 3, 4, 5, 6, 7, 8];
+                const result = numbers.filter(isOdd);
+
+                document.getElementById('complement-result').innerHTML = `
+                    <strong>Input:</strong> ${numbers.join(', ')}<br>
+                    <strong>Condition:</strong> NOT isEven<br>
+                    <strong>Output:</strong> ${result.join(', ')}
+                `;
+
+                document.getElementById('complement-code').textContent =
+`// With Orlando complement():
+import { complement } from 'orlando-transducers';
+
+const isEven = x => x % 2 === 0;
+const isOdd = complement(isEven);
+
+// More readable than: x => !isEven(x)`;
+            }
+
+            // Example 4: allPass()
+            {
+                const users = [
+                    { name: 'Alice', age: 25, email: 'alice@test.com', verified: true, active: true },
+                    { name: 'Bob', age: 17, email: 'bob@test.com', verified: true, active: true },
+                    { name: 'Charlie', age: 30, email: '', verified: true, active: true },
+                    { name: 'Diana', age: 28, email: 'diana@test.com', verified: false, active: true },
+                    { name: 'Eve', age: 35, email: 'eve@test.com', verified: true, active: false },
+                    { name: 'Frank', age: 22, email: 'frank@test.com', verified: true, active: true },
+                ];
+
+                const validUser = user =>
+                    user.age >= 18 &&
+                    user.email.length > 0 &&
+                    user.verified === true &&
+                    user.active === true;
+
+                const validUsers = users.filter(validUser);
+
+                document.getElementById('allpass-result').innerHTML = `
+                    <strong>Total users:</strong> ${users.length}<br>
+                    <strong>Valid users:</strong> ${validUsers.length} (${validUsers.map(u => u.name).join(', ')})<br>
+                    <strong>Validation checks:</strong> Age ≥ 18, Has email, Verified, Active
+                `;
+
+                const tbody = document.getElementById('allpass-body');
+                users.forEach(user => {
+                    const checks = [
+                        user.age >= 18,
+                        user.email.length > 0,
+                        user.verified,
+                        user.active
+                    ];
+                    const valid = checks.every(c => c);
+                    tbody.innerHTML += `
+                        <tr>
+                            <td><strong>${user.name}</strong></td>
+                            <td><span class="${checks[0] ? 'pass' : 'fail'}">${checks[0] ? '✓' : '✗'}</span></td>
+                            <td><span class="${checks[1] ? 'pass' : 'fail'}">${checks[1] ? '✓' : '✗'}</span></td>
+                            <td><span class="${checks[2] ? 'pass' : 'fail'}">${checks[2] ? '✓' : '✗'}</span></td>
+                            <td><span class="${checks[3] ? 'pass' : 'fail'}">${checks[3] ? '✓' : '✗'}</span></td>
+                            <td><span class="${valid ? 'pass' : 'fail'}">${valid ? 'PASS' : 'FAIL'}</span></td>
+                        </tr>
+                    `;
+                });
+            }
+
+            // Example 5: anyPass()
+            {
+                const numbers = [0, 7, 15, 50, 101, 1500];
+                const isSpecial = x => x === 0 || x % 10 === 0 || x > 1000;
+                const result = numbers.filter(isSpecial);
+
+                document.getElementById('anypass-result').innerHTML = `
+                    <strong>Input:</strong> ${numbers.join(', ')}<br>
+                    <strong>Conditions:</strong> isZero OR isDivisibleBy10 OR isVeryLarge<br>
+                    <strong>Output:</strong> ${result.join(', ')}
+                `;
+
+                document.getElementById('anypass-code').textContent =
+`// With Orlando anyPass():
+import { anyPass } from 'orlando-transducers';
+
+const isSpecial = anyPass([
+  x => x === 0,
+  x => x % 10 === 0,
+  x => x > 1000
+]);
+
+// Short-circuits: stops checking after first true
+// Result: [0, 50, 1500]`;
+            }
+
+            // Example 6: Nested Composition
+            {
+                const numbers = [-4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6];
+
+                const isPositive = x => x > 0;
+                const isEven = x => x % 2 === 0;
+                const isNegative = x => x < 0;
+                const isOdd = x => x % 2 !== 0;
+
+                const isPositiveEven = x => isPositive(x) && isEven(x);
+                const isNegativeOdd = x => isNegative(x) && isOdd(x);
+                const isSpecial = x => isPositiveEven(x) || isNegativeOdd(x);
+
+                const result = numbers.filter(isSpecial);
+
+                document.getElementById('nested-result').innerHTML = `
+                    <strong>Input:</strong> ${numbers.join(', ')}<br>
+                    <strong>Complex condition:</strong> (positive AND even) OR (negative AND odd)<br>
+                    <strong>Output:</strong> ${result.join(', ')}
+                `;
+
+                document.getElementById('nested-code').textContent =
+`// With Orlando - beautifully composable:
+import { both, either } from 'orlando-transducers';
+
+const isPositiveEven = both(
+  x => x > 0,
+  x => x % 2 === 0
+);
+
+const isNegativeOdd = both(
+  x => x < 0,
+  x => x % 2 !== 0
+);
+
+const isSpecial = either(isPositiveEven, isNegativeOdd);
+
+// Much cleaner than nested boolean logic!
+// Result: [-3, -1, 2, 4, 6]`;
+            }
+
+            // Example 7: When
+            {
+                const numbers = [-1, 2, -3, 4, -5, 6];
+
+                // Simulate When: double if positive
+                const result = numbers.map(x => x > 0 ? x * 2 : x);
+
+                document.getElementById('when-result').innerHTML = `
+                    <strong>Input:</strong> ${numbers.join(', ')}<br>
+                    <strong>Condition:</strong> When(x > 0, double)<br>
+                    <strong>Output:</strong> ${result.join(', ')}<br>
+                    <strong>Note:</strong> Negative numbers pass through unchanged
+                `;
+
+                document.getElementById('when-code').textContent =
+`// With Orlando When transducer:
+import { When, toArray } from 'orlando-transducers';
+
+const doubleIfPositive = new When(
+  x => x > 0,
+  x => x * 2
+);
+
+const result = toArray(doubleIfPositive, data);
+// Result: [-1, 4, -3, 8, -5, 12]`;
+            }
+
+            // Example 8: Unless
+            {
+                const numbers = [-1, 2, -3, 4, -5, 6];
+
+                // Simulate Unless: zero if negative
+                const result = numbers.map(x => x > 0 ? x : 0);
+
+                document.getElementById('unless-result').innerHTML = `
+                    <strong>Input:</strong> ${numbers.join(', ')}<br>
+                    <strong>Condition:</strong> Unless(x > 0, setToZero)<br>
+                    <strong>Output:</strong> ${result.join(', ')}<br>
+                    <strong>Note:</strong> Transforms negative numbers to 0
+                `;
+
+                document.getElementById('unless-code').textContent =
+`// With Orlando Unless transducer:
+import { Unless, toArray } from 'orlando-transducers';
+
+const zeroIfNegative = new Unless(
+  x => x > 0,
+  _ => 0
+);
+
+const result = toArray(zeroIfNegative, data);
+// Result: [0, 2, 0, 4, 0, 6]`;
+            }
+
+            // Example 9: IfElse
+            {
+                const numbers = [-4, 3, -6, 5, -2, 8];
+
+                // Simulate IfElse: double if positive, halve if negative
+                const result = numbers.map(x => x >= 0 ? x * 2 : x / 2);
+
+                document.getElementById('ifelse-result').innerHTML = `
+                    <strong>Input:</strong> ${numbers.join(', ')}<br>
+                    <strong>Condition:</strong> IfElse(x ≥ 0, double, halve)<br>
+                    <strong>Output:</strong> ${result.join(', ')}<br>
+                    <strong>Note:</strong> Different transformations for positive vs negative
+                `;
+
+                document.getElementById('ifelse-code').textContent =
+`// With Orlando IfElse transducer:
+import { IfElse, toArray } from 'orlando-transducers';
+
+const normalize = new IfElse(
+  x => x >= 0,
+  x => x * 2,    // positive: double
+  x => x / 2     // negative: halve
+);
+
+const result = toArray(normalize, data);
+// Result: [-2, 6, -3, 10, -1, 16]`;
+            }
+
+            // Example 10: Real-World Pipeline
+            {
+                const users = [
+                    { name: 'Alice', email: 'ALICE@TEST.COM', age: 25, verified: true, role: 'admin' },
+                    { name: 'Bob', email: 'bob@test.com', age: 17, verified: true, role: 'user' },
+                    { name: 'Charlie', email: 'CHARLIE@TEST.COM', age: 30, verified: false, role: 'user' },
+                    { name: 'Diana', email: 'diana@test.com', age: 28, verified: true, role: 'user' },
+                ];
+
+                // Complex validation and transformation
+                const validUsers = users
+                    .filter(u => u.age >= 18 && u.verified)
+                    .map(u => ({
+                        ...u,
+                        email: u.email.toLowerCase(),
+                        priority: u.role === 'admin' ? 'high' : 'normal'
+                    }));
+
+                document.getElementById('realworld-result').innerHTML = `
+                    <strong>Input:</strong> ${users.length} users<br>
+                    <strong>Valid users (age ≥ 18, verified):</strong> ${validUsers.length}<br>
+                    <strong>Transformations applied:</strong><br>
+                    • Normalized emails to lowercase<br>
+                    • Added priority based on role<br>
+                    <br>
+                    <strong>Results:</strong><br>
+                    ${validUsers.map(u =>
+                        `• ${u.name}: ${u.email} (${u.priority} priority)`
+                    ).join('<br>')}
+                `;
+            }
+
+            console.log('✅ All logic function examples completed!');
+        }
+
+        runExamples().catch(err => {
+            console.error('❌ Error:', err);
+            document.body.innerHTML += `
+                <div style="background: #f8d7da; color: #721c24; padding: 20px; margin: 20px 0; border-radius: 4px;">
+                    <strong>Error:</strong> ${err.message}
+                </div>
+            `;
+        });
+    </script>
+</body>
+</html>
