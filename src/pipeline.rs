@@ -40,6 +40,7 @@ enum Operation {
         map: Rc<dyn Fn(JsValue) -> JsValue>,
         filter: Rc<dyn Fn(&JsValue) -> bool>,
     },
+    FlatMap(Rc<dyn Fn(JsValue) -> Vec<JsValue>>),
     Take(usize),
     TakeWhile(Rc<dyn Fn(&JsValue) -> bool>),
     Drop(usize),
@@ -105,6 +106,37 @@ impl Pipeline {
             ops.push(Operation::Filter(filter_fn));
         }
 
+        Pipeline { operations: ops }
+    }
+
+    /// Add a flatMap operation to the pipeline.
+    ///
+    /// Maps each value to an array and flattens the results.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - A JavaScript function that returns an array for each value
+    #[wasm_bindgen(js_name = flatMap)]
+    pub fn flat_map(&self, f: &Function) -> Pipeline {
+        let f = f.clone();
+        let mut ops = self.operations.clone();
+
+        let flatmap_fn = Rc::new(move |val: JsValue| -> Vec<JsValue> {
+            let this = JsValue::null();
+            match f.call1(&this, &val) {
+                Ok(result) => {
+                    // Convert JsValue array to Vec<JsValue>
+                    if let Ok(array) = result.dyn_into::<Array>() {
+                        (0..array.length()).map(|i| array.get(i)).collect()
+                    } else {
+                        vec![]
+                    }
+                }
+                Err(_) => vec![],
+            }
+        }) as Rc<dyn Fn(JsValue) -> Vec<JsValue>>;
+
+        ops.push(Operation::FlatMap(flatmap_fn));
         Pipeline { operations: ops }
     }
 
@@ -194,22 +226,31 @@ impl Pipeline {
     #[wasm_bindgen(js_name = toArray)]
     pub fn to_array(&self, source: &Array) -> Array {
         let result = Array::new();
+        let mut should_stop = false;
 
         for i in 0..source.length() {
-            let val = source.get(i);
+            if should_stop {
+                break;
+            }
 
-            match self.process_value(val) {
-                ProcessResult::Continue(v) => {
-                    result.push(&v);
-                }
-                ProcessResult::Skip => {
-                    // Skip this value
-                }
-                ProcessResult::Stop(v) => {
-                    if let Some(val) = v {
-                        result.push(&val);
+            let val = source.get(i);
+            let results = self.process_value(val);
+
+            for res in results {
+                match res {
+                    ProcessResult::Continue(v) => {
+                        result.push(&v);
                     }
-                    break;
+                    ProcessResult::Skip => {
+                        // Skip this value
+                    }
+                    ProcessResult::Stop(v) => {
+                        if let Some(val) = v {
+                            result.push(&val);
+                        }
+                        should_stop = true;
+                        break;
+                    }
                 }
             }
         }
@@ -227,22 +268,31 @@ impl Pipeline {
     #[wasm_bindgen]
     pub fn reduce(&self, source: &Array, reducer: &Function, initial: JsValue) -> JsValue {
         let mut acc = initial;
+        let mut should_stop = false;
 
         for i in 0..source.length() {
-            let val = source.get(i);
+            if should_stop {
+                break;
+            }
 
-            match self.process_value(val) {
-                ProcessResult::Continue(v) => {
-                    let this = JsValue::null();
-                    acc = reducer.call2(&this, &acc, &v).unwrap_or(acc);
-                }
-                ProcessResult::Skip => {}
-                ProcessResult::Stop(v) => {
-                    if let Some(val) = v {
+            let val = source.get(i);
+            let results = self.process_value(val);
+
+            for res in results {
+                match res {
+                    ProcessResult::Continue(v) => {
                         let this = JsValue::null();
-                        acc = reducer.call2(&this, &acc, &val).unwrap_or(acc);
+                        acc = reducer.call2(&this, &acc, &v).unwrap_or(acc);
                     }
-                    break;
+                    ProcessResult::Skip => {}
+                    ProcessResult::Stop(v) => {
+                        if let Some(val) = v {
+                            let this = JsValue::null();
+                            acc = reducer.call2(&this, &acc, &val).unwrap_or(acc);
+                        }
+                        should_stop = true;
+                        break;
+                    }
                 }
             }
         }
@@ -261,20 +311,26 @@ impl Pipeline {
     }
 
     // Internal helper to process a single value through the pipeline
-    #[allow(unused_assignments)]
-    fn process_value(&self, mut val: JsValue) -> ProcessResult {
-        let mut take_count = 0;
-        let mut drop_count = 0;
-        let mut dropping = false;
+    fn process_value(&self, val: JsValue) -> Vec<ProcessResult> {
+        self.process_value_from(val, 0, &mut ProcessState::new())
+    }
 
-        for op in &self.operations {
+    // Process a value starting from a specific operation index
+    #[allow(unused_assignments)]
+    fn process_value_from(
+        &self,
+        mut val: JsValue,
+        start_idx: usize,
+        state: &mut ProcessState,
+    ) -> Vec<ProcessResult> {
+        for (idx, op) in self.operations.iter().enumerate().skip(start_idx) {
             match op {
                 Operation::Map(f) => {
                     val = f(val);
                 }
                 Operation::Filter(pred) => {
                     if !pred(&val) {
-                        return ProcessResult::Skip;
+                        return vec![ProcessResult::Skip];
                     }
                 }
                 // OPTIMIZED: Fused Map + Filter in single operation
@@ -282,31 +338,54 @@ impl Pipeline {
                 Operation::MapFilter { map, filter } => {
                     val = map(val);
                     if !filter(&val) {
-                        return ProcessResult::Skip;
+                        return vec![ProcessResult::Skip];
                     }
                 }
+                Operation::FlatMap(f) => {
+                    // Expand the value into multiple values
+                    let expanded = f(val);
+                    let mut results = Vec::new();
+
+                    // Process each expanded value through the remaining operations
+                    for expanded_val in expanded {
+                        let sub_results = self.process_value_from(expanded_val, idx + 1, state);
+
+                        // Check if we should stop early
+                        let should_stop = sub_results
+                            .iter()
+                            .any(|r| matches!(r, ProcessResult::Stop(_)));
+
+                        results.extend(sub_results);
+
+                        if should_stop {
+                            break;
+                        }
+                    }
+
+                    return results;
+                }
                 Operation::Take(n) => {
-                    take_count += 1;
-                    if take_count > *n {
-                        return ProcessResult::Stop(None);
+                    state.take_count += 1;
+                    if state.take_count > *n {
+                        return vec![ProcessResult::Stop(None)];
                     }
                 }
                 Operation::TakeWhile(pred) => {
                     if !pred(&val) {
-                        return ProcessResult::Stop(None);
+                        return vec![ProcessResult::Stop(None)];
                     }
                 }
                 Operation::Drop(n) => {
-                    if drop_count < *n {
-                        drop_count += 1;
-                        return ProcessResult::Skip;
+                    if state.drop_count < *n {
+                        state.drop_count += 1;
+                        return vec![ProcessResult::Skip];
                     }
                 }
                 Operation::DropWhile(pred) => {
-                    if !dropping && pred(&val) {
-                        return ProcessResult::Skip;
+                    if !state.dropping && pred(&val) {
+                        return vec![ProcessResult::Skip];
                     } else {
-                        dropping = false;
+                        state.dropping = false;
                     }
                 }
                 Operation::Tap(f) => {
@@ -315,7 +394,7 @@ impl Pipeline {
             }
         }
 
-        ProcessResult::Continue(val)
+        vec![ProcessResult::Continue(val)]
     }
 }
 
@@ -329,6 +408,23 @@ enum ProcessResult {
     Continue(JsValue),
     Skip,
     Stop(Option<JsValue>),
+}
+
+/// State maintained during pipeline processing
+struct ProcessState {
+    take_count: usize,
+    drop_count: usize,
+    dropping: bool,
+}
+
+impl ProcessState {
+    fn new() -> Self {
+        ProcessState {
+            take_count: 0,
+            drop_count: 0,
+            dropping: false,
+        }
+    }
 }
 
 // Export convenience functions

@@ -516,3 +516,346 @@ proptest! {
         prop_assert_eq!(result1, result2);
     }
 }
+
+// Property: FlatMap flattens nested structures
+proptest! {
+    #[test]
+    fn test_flatmap_flattens(vec in prop::collection::vec(any::<i32>(), 0..50)) {
+        use orlando::FlatMap;
+
+        // FlatMap with duplicate function should double the length
+        let pipeline = FlatMap::new(|x: i32| vec![x, x]);
+        let result = to_vec(&pipeline, vec.clone());
+
+        prop_assert_eq!(result.len(), vec.len() * 2);
+    }
+}
+
+// Property: FlatMap with identity should equal original
+proptest! {
+    #[test]
+    fn test_flatmap_identity(vec in prop::collection::vec(any::<i32>(), 0..100)) {
+        use orlando::FlatMap;
+
+        // FlatMap with single-element vec is identity
+        let pipeline = FlatMap::new(|x: i32| vec![x]);
+        let result = to_vec(&pipeline, vec.clone());
+
+        prop_assert_eq!(result, vec);
+    }
+}
+
+// Property: FlatMap with empty should produce empty
+proptest! {
+    #[test]
+    fn test_flatmap_empty(vec in prop::collection::vec(any::<i32>(), 0..100)) {
+        use orlando::FlatMap;
+
+        // FlatMap with empty vec should produce nothing
+        let pipeline = FlatMap::new(|_x: i32| Vec::<i32>::new());
+        let result = to_vec(&pipeline, vec);
+
+        prop_assert_eq!(result, Vec::<i32>::new());
+    }
+}
+
+// Property: FlatMap preserves order
+proptest! {
+    #[test]
+    fn test_flatmap_preserves_order(vec in prop::collection::vec(0i32..10, 0..50)) {
+        use orlando::FlatMap;
+
+        // FlatMap should preserve element order
+        let pipeline = FlatMap::new(|x: i32| vec![x, x + 100]);
+        let result = to_vec(&pipeline, vec.clone());
+
+        // Check that original elements appear in order
+        for i in 0..vec.len() {
+            prop_assert_eq!(result[i * 2], vec[i]);
+        }
+    }
+}
+
+// Property: FlatMap composition law (associativity)
+proptest! {
+    #[test]
+    fn test_flatmap_associativity(vec in prop::collection::vec(0i32..10, 0..20)) {
+        use orlando::FlatMap;
+
+        // flatMap(f).flatMap(g) == flatMap(x => flatMap(g, f(x)))
+        let f = |x: i32| vec![x, x + 1];
+        let g = |x: i32| vec![x, x * 2];
+
+        // flatMap(f).flatMap(g)
+        let pipeline1 = FlatMap::new(f).compose(FlatMap::new(g));
+        let result1 = to_vec(&pipeline1, vec.clone());
+
+        // flatMap(x => flatMap(g, f(x)))
+        let pipeline2 = FlatMap::new(move |x: i32| {
+            let intermediate = f(x);
+            let mut output = Vec::new();
+            for y in intermediate {
+                output.extend(g(y));
+            }
+            output
+        });
+        let result2 = to_vec(&pipeline2, vec);
+
+        prop_assert_eq!(result1, result2);
+    }
+}
+
+// Property: FlatMap with early termination stops correctly
+proptest! {
+    #[test]
+    fn test_flatmap_early_termination(vec in prop::collection::vec(any::<i32>(), 1..100), n in 1usize..20) {
+        use orlando::FlatMap;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        let call_count = Arc::new(AtomicUsize::new(0));
+        let counter = Arc::clone(&call_count);
+
+        // FlatMap that counts invocations
+        let pipeline = FlatMap::new(move |x: i32| {
+            counter.fetch_add(1, Ordering::SeqCst);
+            vec![x, x + 1]
+        }).compose(Take::new(n));
+
+        let _result = to_vec(&pipeline, vec);
+
+        // Should only call flatMap function enough times to produce n elements
+        // Since each call produces 2 elements, we need at most ceil(n/2) calls
+        let expected_max_calls = n.div_ceil(2) + 1;  // +1 for potential partial
+        let actual_calls = call_count.load(Ordering::SeqCst);
+
+        prop_assert!(actual_calls <= expected_max_calls,
+            "FlatMap called {} times, expected at most {} for n={}",
+            actual_calls, expected_max_calls, n);
+    }
+}
+
+// Property: Partition preserves total count
+proptest! {
+    #[test]
+    fn test_partition_total_count(vec in prop::collection::vec(any::<i32>(), 0..100)) {
+        use orlando::transducer::Identity;
+
+        let id = Identity::<i32>::new();
+        let (pass, fail) = partition(&id, vec.clone(), |x| x % 2 == 0);
+
+        prop_assert_eq!(pass.len() + fail.len(), vec.len());
+    }
+}
+
+// Property: All elements in pass partition satisfy predicate
+proptest! {
+    #[test]
+    fn test_partition_pass_elements(vec in prop::collection::vec(any::<i32>(), 0..100)) {
+        use orlando::transducer::Identity;
+
+        let id = Identity::<i32>::new();
+        let (pass, _fail) = partition(&id, vec, |x| x % 2 == 0);
+
+        // All pass elements must be even
+        prop_assert!(pass.iter().all(|x| x % 2 == 0));
+    }
+}
+
+// Property: All elements in fail partition don't satisfy predicate
+proptest! {
+    #[test]
+    fn test_partition_fail_elements(vec in prop::collection::vec(any::<i32>(), 0..100)) {
+        use orlando::transducer::Identity;
+
+        let id = Identity::<i32>::new();
+        let (_pass, fail) = partition(&id, vec, |x| x % 2 == 0);
+
+        // All fail elements must be odd
+        prop_assert!(fail.iter().all(|x| x % 2 != 0));
+    }
+}
+
+// Property: Partition preserves order within each group
+proptest! {
+    #[test]
+    fn test_partition_preserves_order(vec in prop::collection::vec(0i32..100, 0..50)) {
+        use orlando::transducer::Identity;
+
+        let id = Identity::<i32>::new();
+        let (evens, odds) = partition(&id, vec.clone(), |x| x % 2 == 0);
+
+        // Extract evens and odds from original in order
+        let expected_evens: Vec<i32> = vec.iter().filter(|x| *x % 2 == 0).copied().collect();
+        let expected_odds: Vec<i32> = vec.iter().filter(|x| *x % 2 != 0).copied().collect();
+
+        prop_assert_eq!(evens, expected_evens);
+        prop_assert_eq!(odds, expected_odds);
+    }
+}
+
+// Property: Partition works correctly with transformations
+proptest! {
+    #[test]
+    fn test_partition_with_transform(vec in prop::collection::vec(0i32..50, 0..50)) {
+        use orlando::Map;
+
+        // Double each element, then partition by >50
+        let double = Map::new(|x: i32| x * 2);
+        let (greater, lesser) = partition(&double, vec.clone(), |x| *x > 50);
+
+        // Verify all elements in greater are > 50
+        prop_assert!(greater.iter().all(|x| *x > 50));
+
+        // Verify all elements in lesser are <= 50
+        prop_assert!(lesser.iter().all(|x| *x <= 50));
+
+        // Verify total count
+        prop_assert_eq!(greater.len() + lesser.len(), vec.len());
+    }
+}
+
+// Property: Find returns first matching element
+proptest! {
+    #[test]
+    fn test_find_returns_first_match(vec in prop::collection::vec(any::<i32>(), 0..100)) {
+        use orlando::transducer::Identity;
+
+        let id = Identity::<i32>::new();
+        let result = find(&id, vec.clone(), |x| x % 2 == 0);
+
+        // If we find a match, it should be the first even number
+        if let Some(found) = result {
+            let expected = vec.iter().find(|x| *x % 2 == 0);
+            prop_assert_eq!(Some(&found), expected);
+        } else {
+            // If no match, verify there are no evens
+            prop_assert!(vec.iter().all(|x| x % 2 != 0));
+        }
+    }
+}
+
+// Property: Find with early termination stops immediately
+proptest! {
+    #[test]
+    fn test_find_early_termination(vec in prop::collection::vec(any::<i32>(), 1..100)) {
+        use orlando::transducer::Identity;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        // Find the position of the first even number
+        let first_even_pos = vec.iter().position(|x| x % 2 == 0);
+
+        let call_count = Arc::new(AtomicUsize::new(0));
+        let counter = Arc::clone(&call_count);
+
+        let id = Identity::<i32>::new();
+        let _result = find(&id, vec.iter().map(|x| {
+            counter.fetch_add(1, Ordering::SeqCst);
+            *x
+        }), |x| x % 2 == 0);
+
+        let actual_calls = call_count.load(Ordering::SeqCst);
+
+        // Should only process elements up to and including the first match
+        if let Some(pos) = first_even_pos {
+            prop_assert_eq!(actual_calls, pos + 1,
+                "find() should stop after finding match at position {}, but processed {} elements",
+                pos, actual_calls);
+        } else {
+            // If no match, should process all elements
+            prop_assert_eq!(actual_calls, vec.len());
+        }
+    }
+}
+
+// Property: Find on empty collection returns None
+proptest! {
+    #[test]
+    fn test_find_empty_collection(_dummy in 0..1usize) {
+        use orlando::transducer::Identity;
+
+        let id = Identity::<i32>::new();
+        let result = find(&id, Vec::<i32>::new(), |x| x % 2 == 0);
+
+        prop_assert_eq!(result, None);
+    }
+}
+
+// Property: Find with transformation applies correctly
+proptest! {
+    #[test]
+    fn test_find_with_transform(vec in prop::collection::vec(0i32..50, 0..50)) {
+        use orlando::Map;
+
+        // Double each element, then find first >50
+        let double = Map::new(|x: i32| x * 2);
+        let result = find(&double, vec.clone(), |x| *x > 50);
+
+        // Manually compute expected
+        let expected = vec.iter()
+            .map(|x| x * 2)
+            .find(|x| *x > 50);
+
+        prop_assert_eq!(result, expected);
+    }
+}
+
+// Property: Reject is equivalent to Filter with negated predicate
+proptest! {
+    #[test]
+    fn test_reject_inverse_of_filter(vec in prop::collection::vec(any::<i32>(), 0..100)) {
+        use orlando::{Reject, Filter};
+
+        // Reject(p) == Filter(!p)
+        let reject = Reject::new(|x: &i32| x % 2 == 0);
+        let filter = Filter::new(|x: &i32| x % 2 != 0);
+
+        let result1 = to_vec(&reject, vec.clone());
+        let result2 = to_vec(&filter, vec);
+
+        prop_assert_eq!(result1, result2);
+    }
+}
+
+// Property: Reject decreases or maintains length
+proptest! {
+    #[test]
+    fn test_reject_decreases_length(vec in prop::collection::vec(any::<i32>(), 0..100)) {
+        use orlando::Reject;
+
+        let reject = Reject::new(|x: &i32| x % 2 == 0);
+        let result = to_vec(&reject, vec.clone());
+
+        prop_assert!(result.len() <= vec.len());
+    }
+}
+
+// Property: Reject + Filter with same predicate = empty
+proptest! {
+    #[test]
+    fn test_reject_filter_complement(vec in prop::collection::vec(any::<i32>(), 0..100)) {
+        use orlando::{Reject, Filter};
+
+        // reject(p).filter(p) should produce empty result
+        let pipeline = Reject::new(|x: &i32| x % 2 == 0)
+            .compose(Filter::new(|x: &i32| x % 2 == 0));
+        let result = to_vec(&pipeline, vec);
+
+        prop_assert!(result.is_empty());
+    }
+}
+
+// Property: All rejected elements satisfy the predicate
+proptest! {
+    #[test]
+    fn test_reject_complement_elements(vec in prop::collection::vec(any::<i32>(), 0..100)) {
+        use orlando::Reject;
+
+        let reject = Reject::new(|x: &i32| x % 2 == 0);
+        let result = to_vec(&reject, vec.clone());
+
+        // All elements in result should NOT be even (should be odd or fail predicate)
+        prop_assert!(result.iter().all(|x| x % 2 != 0));
+    }
+}

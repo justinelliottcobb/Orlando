@@ -108,6 +108,60 @@ where
     }
 }
 
+/// Reject transducer - inverse of Filter, only passes values NOT matching a predicate.
+///
+/// This is more intuitive than writing `filter(x => !predicate(x))` for exclusion logic.
+///
+/// # Examples
+///
+/// ```
+/// use orlando::transforms::Reject;
+/// use orlando::collectors::to_vec;
+///
+/// let no_evens = Reject::new(|x: &i32| x % 2 == 0);
+/// let result = to_vec(&no_evens, vec![1, 2, 3, 4, 5]);
+/// assert_eq!(result, vec![1, 3, 5]); // Only odd numbers
+/// ```
+pub struct Reject<P, T> {
+    predicate: Rc<P>,
+    _phantom: PhantomData<T>,
+}
+
+impl<P, T> Reject<P, T>
+where
+    P: Fn(&T) -> bool,
+{
+    pub fn new(predicate: P) -> Self {
+        Reject {
+            predicate: Rc::new(predicate),
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<P, T> Transducer<T, T> for Reject<P, T>
+where
+    P: Fn(&T) -> bool + 'static,
+    T: 'static,
+{
+    #[inline(always)]
+    fn apply<Acc, R>(&self, reducer: R) -> Box<dyn Fn(Acc, T) -> Step<Acc>>
+    where
+        R: Fn(Acc, T) -> Step<Acc> + 'static,
+        Acc: 'static,
+    {
+        let predicate = Rc::clone(&self.predicate);
+        Box::new(move |acc, val| {
+            // Inverse of filter - pass if predicate is FALSE
+            if !predicate(&val) {
+                reducer(acc, val)
+            } else {
+                cont(acc)
+            }
+        })
+    }
+}
+
 /// Take transducer - takes the first n elements, then stops.
 ///
 /// This demonstrates early termination via the Step monad.
@@ -480,6 +534,77 @@ where
     }
 }
 
+/// FlatMap transducer - maps each element to a collection and flattens the result.
+///
+/// This is the monadic bind operation for transducers. Also known as `chain` in
+/// some functional programming libraries.
+///
+/// # Category Theory
+///
+/// FlatMap is the bind operation (>>=) for the transducer monad:
+/// ```text
+/// flatMap : (A -> [B]) -> A ~> B
+/// ```
+///
+/// # Examples
+///
+/// ```
+/// use orlando::transforms::FlatMap;
+/// use orlando::transducer::Transducer;
+/// use orlando::collectors::to_vec;
+///
+/// // Duplicate and increment each element
+/// let flat = FlatMap::new(|x: i32| vec![x, x + 1]);
+/// let result = to_vec(&flat, vec![1, 2, 3]);
+/// assert_eq!(result, vec![1, 2, 2, 3, 3, 4]);
+/// ```
+pub struct FlatMap<F, In, Out> {
+    f: Rc<F>,
+    _phantom: PhantomData<(In, Out)>,
+}
+
+impl<F, In, Out> FlatMap<F, In, Out>
+where
+    F: Fn(In) -> Vec<Out>,
+{
+    pub fn new(f: F) -> Self {
+        FlatMap {
+            f: Rc::new(f),
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<F, In, Out> Transducer<In, Out> for FlatMap<F, In, Out>
+where
+    F: Fn(In) -> Vec<Out> + 'static,
+    In: 'static,
+    Out: 'static,
+{
+    #[inline(always)]
+    fn apply<Acc, R>(&self, reducer: R) -> Box<dyn Fn(Acc, In) -> Step<Acc>>
+    where
+        R: Fn(Acc, Out) -> Step<Acc> + 'static,
+        Acc: 'static,
+    {
+        let f = Rc::clone(&self.f);
+        Box::new(move |mut acc, val| {
+            // Apply function to get collection
+            let collection = f(val);
+
+            // Reduce over the collection
+            for item in collection {
+                match reducer(acc, item) {
+                    Step::Continue(new_acc) => acc = new_acc,
+                    Step::Stop(final_acc) => return stop(final_acc),
+                }
+            }
+
+            cont(acc)
+        })
+    }
+}
+
 /// Tap transducer - performs side effects without transforming values.
 ///
 /// # Examples
@@ -559,6 +684,47 @@ mod tests {
     }
 
     #[test]
+    fn test_reject() {
+        let no_evens = Reject::new(|x: &i32| x % 2 == 0);
+        let reducer = |acc: Vec<i32>, x: i32| {
+            let mut v = acc;
+            v.push(x);
+            cont(v)
+        };
+
+        let transformed = no_evens.apply(reducer);
+        let r1 = transformed(vec![], 2); // even, should be rejected
+        let r2 = transformed(r1.unwrap(), 3); // odd, should pass
+        assert_eq!(r2.unwrap(), vec![3]);
+    }
+
+    #[test]
+    fn test_reject_composition() {
+        use crate::collectors::to_vec;
+
+        // Reject evens, then double the remaining odds
+        let pipeline = Reject::new(|x: &i32| x % 2 == 0).compose(Map::new(|x: i32| x * 2));
+        let result = to_vec(&pipeline, vec![1, 2, 3, 4, 5]);
+        assert_eq!(result, vec![2, 6, 10]); // [1, 3, 5] doubled
+    }
+
+    #[test]
+    fn test_reject_vs_filter() {
+        use crate::collectors::to_vec;
+
+        // Reject(p) should be equivalent to Filter(!p)
+        let data = vec![1, 2, 3, 4, 5, 6];
+
+        let reject_evens = Reject::new(|x: &i32| x % 2 == 0);
+        let filter_odds = Filter::new(|x: &i32| x % 2 != 0);
+
+        let result1 = to_vec(&reject_evens, data.clone());
+        let result2 = to_vec(&filter_odds, data);
+
+        assert_eq!(result1, result2);
+    }
+
+    #[test]
     fn test_take() {
         let take_2 = Take::<i32>::new(2);
         let reducer = |acc: Vec<i32>, x: i32| {
@@ -572,5 +738,47 @@ mod tests {
         assert!(r1.is_continue());
         let r2 = transformed(r1.unwrap(), 2);
         assert!(r2.is_stop()); // Should stop after 2 elements
+    }
+
+    #[test]
+    fn test_flatmap() {
+        use crate::collectors::to_vec;
+
+        // Test basic flattening
+        let flat = FlatMap::new(|x: i32| vec![x, x + 1]);
+        let result = to_vec(&flat, vec![1, 2, 3]);
+        assert_eq!(result, vec![1, 2, 2, 3, 3, 4]);
+    }
+
+    #[test]
+    fn test_flatmap_empty() {
+        use crate::collectors::to_vec;
+
+        // Test with function that returns empty collections
+        let flat = FlatMap::new(|x: i32| if x % 2 == 0 { vec![x] } else { vec![] });
+        let result = to_vec(&flat, vec![1, 2, 3, 4]);
+        assert_eq!(result, vec![2, 4]);
+    }
+
+    #[test]
+    fn test_flatmap_composition() {
+        use crate::collectors::to_vec;
+
+        // Test composing with other transducers
+        let pipeline = Map::new(|x: i32| x * 2).compose(FlatMap::new(|x: i32| vec![x, x + 1]));
+        let result = to_vec(&pipeline, vec![1, 2, 3]);
+        assert_eq!(result, vec![2, 3, 4, 5, 6, 7]);
+    }
+
+    #[test]
+    fn test_flatmap_early_termination() {
+        use crate::collectors::to_vec;
+
+        // FlatMap should respect early termination
+        let pipeline = FlatMap::new(|x: i32| vec![x, x + 1, x + 2]).compose(Take::new(5));
+        let result = to_vec(&pipeline, vec![1, 2, 3, 4, 5]);
+        // Should stop after 5 elements total
+        assert_eq!(result.len(), 5);
+        assert_eq!(result, vec![1, 2, 3, 2, 3]);
     }
 }

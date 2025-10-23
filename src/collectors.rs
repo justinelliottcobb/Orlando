@@ -238,6 +238,84 @@ where
     reduce(transducer, source, false, reducer)
 }
 
+/// Partition elements into two groups based on a predicate.
+///
+/// Returns a tuple of (pass, fail) where `pass` contains elements that
+/// satisfy the predicate and `fail` contains those that don't.
+///
+/// # Examples
+///
+/// ```
+/// use orlando::collectors::partition;
+/// use orlando::transducer::Identity;
+///
+/// let id = Identity::<i32>::new();
+/// let (evens, odds) = partition(&id, vec![1, 2, 3, 4, 5].into_iter(), |x| x % 2 == 0);
+/// assert_eq!(evens, vec![2, 4]);
+/// assert_eq!(odds, vec![1, 3, 5]);
+/// ```
+pub fn partition<T, U, Iter, P>(
+    transducer: &impl Transducer<T, U>,
+    source: Iter,
+    predicate: P,
+) -> (Vec<U>, Vec<U>)
+where
+    T: 'static,
+    U: 'static,
+    Iter: IntoIterator<Item = T>,
+    P: Fn(&U) -> bool + 'static,
+{
+    let reducer = move |mut acc: (Vec<U>, Vec<U>), x: U| {
+        if predicate(&x) {
+            acc.0.push(x);
+        } else {
+            acc.1.push(x);
+        }
+        cont(acc)
+    };
+
+    reduce(transducer, source, (Vec::new(), Vec::new()), reducer)
+}
+
+/// Find the first element that satisfies a predicate.
+///
+/// Returns `Some(element)` if found, `None` otherwise.
+/// Utilizes early termination to stop as soon as a match is found.
+///
+/// # Examples
+///
+/// ```
+/// use orlando::collectors::find;
+/// use orlando::transducer::Identity;
+///
+/// let id = Identity::<i32>::new();
+/// let result = find(&id, vec![1, 3, 4, 5].into_iter(), |x| x % 2 == 0);
+/// assert_eq!(result, Some(4));
+/// ```
+pub fn find<T, U, Iter, P>(
+    transducer: &impl Transducer<T, U>,
+    source: Iter,
+    predicate: P,
+) -> Option<U>
+where
+    T: 'static,
+    U: 'static,
+    Iter: IntoIterator<Item = T>,
+    P: Fn(&U) -> bool + 'static,
+{
+    use crate::step::stop;
+
+    let reducer = move |_acc: Option<U>, x: U| {
+        if predicate(&x) {
+            stop(Some(x))
+        } else {
+            cont(None)
+        }
+    };
+
+    reduce(transducer, source, None, reducer)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -277,5 +355,72 @@ mod tests {
         let id = Identity::<i32>::new();
         assert!(every(&id, vec![2, 4, 6], |x| x % 2 == 0));
         assert!(!every(&id, vec![2, 3, 6], |x| x % 2 == 0));
+    }
+
+    #[test]
+    fn test_partition() {
+        use crate::transducer::Identity;
+        let id = Identity::<i32>::new();
+        let (evens, odds) = partition(&id, vec![1, 2, 3, 4, 5], |x| x % 2 == 0);
+        assert_eq!(evens, vec![2, 4]);
+        assert_eq!(odds, vec![1, 3, 5]);
+    }
+
+    #[test]
+    fn test_partition_with_transform() {
+        // Partition after transformation
+        let double = Map::new(|x: i32| x * 2);
+        let (greater, lesser) = partition(&double, vec![1, 2, 3, 4, 5], |x| *x > 5);
+        assert_eq!(greater, vec![6, 8, 10]); // doubled: 3->6, 4->8, 5->10
+        assert_eq!(lesser, vec![2, 4]); // doubled: 1->2, 2->4
+    }
+
+    #[test]
+    fn test_partition_all_pass() {
+        use crate::transducer::Identity;
+        let id = Identity::<i32>::new();
+        let (pass, fail) = partition(&id, vec![2, 4, 6], |x| x % 2 == 0);
+        assert_eq!(pass, vec![2, 4, 6]);
+        assert_eq!(fail, Vec::<i32>::new());
+    }
+
+    #[test]
+    fn test_partition_all_fail() {
+        use crate::transducer::Identity;
+        let id = Identity::<i32>::new();
+        let (pass, fail) = partition(&id, vec![1, 3, 5], |x| x % 2 == 0);
+        assert_eq!(pass, Vec::<i32>::new());
+        assert_eq!(fail, vec![1, 3, 5]);
+    }
+
+    #[test]
+    fn test_find() {
+        use crate::transducer::Identity;
+        let id = Identity::<i32>::new();
+        let result = find(&id, vec![1, 3, 4, 5], |x| x % 2 == 0);
+        assert_eq!(result, Some(4));
+    }
+
+    #[test]
+    fn test_find_with_transform() {
+        let double = Map::new(|x: i32| x * 2);
+        let result = find(&double, vec![1, 2, 3, 4, 5], |x| *x > 5);
+        assert_eq!(result, Some(6)); // 3*2 = 6, first element >5
+    }
+
+    #[test]
+    fn test_find_not_found() {
+        use crate::transducer::Identity;
+        let id = Identity::<i32>::new();
+        let result = find(&id, vec![1, 3, 5, 7], |x| x % 2 == 0);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_find_empty() {
+        use crate::transducer::Identity;
+        let id = Identity::<i32>::new();
+        let result = find(&id, Vec::<i32>::new(), |x| x % 2 == 0);
+        assert_eq!(result, None);
     }
 }
