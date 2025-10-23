@@ -706,6 +706,411 @@ where
     result
 }
 
+// ============================================================================
+// Advanced Collectors (Phase 2b)
+// ============================================================================
+
+/// Perform reservoir sampling to randomly sample n elements from a stream.
+///
+/// Uses Algorithm R for uniform random sampling with constant memory (O(n)).
+/// Each element has an equal probability of being selected, even for streams
+/// of unknown size.
+///
+/// # Examples
+///
+/// ```
+/// use orlando::{reservoir_sample, Map};
+///
+/// let pipeline = Map::new(|x: i32| x * 2);
+/// let sample = reservoir_sample(&pipeline, 1..1000, 10);
+/// assert_eq!(sample.len(), 10);
+/// // Each element from the processed stream has equal 10/999 probability
+/// ```
+///
+/// ```
+/// use orlando::{reservoir_sample, transducer::Identity};
+///
+/// // Sample 5 items from large dataset
+/// let id = Identity::<i32>::new();
+/// let sample = reservoir_sample(&id, 1..1_000_000, 5);
+/// assert_eq!(sample.len(), 5);
+/// ```
+pub fn reservoir_sample<T, U, Iter>(
+    transducer: &impl Transducer<T, U>,
+    source: Iter,
+    n: usize,
+) -> Vec<U>
+where
+    T: 'static,
+    U: 'static + Clone,
+    Iter: IntoIterator<Item = T>,
+{
+    use rand::Rng;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    let rng = Rc::new(RefCell::new(rand::thread_rng()));
+    let reservoir: Rc<RefCell<Vec<U>>> = Rc::new(RefCell::new(Vec::with_capacity(n)));
+    let count = Rc::new(RefCell::new(0usize));
+
+    let reducer = {
+        let rng = Rc::clone(&rng);
+        let reservoir = Rc::clone(&reservoir);
+        let count = Rc::clone(&count);
+
+        move |_acc: (), x: U| {
+            let mut c = count.borrow_mut();
+            *c += 1;
+
+            let mut res = reservoir.borrow_mut();
+            if res.len() < n {
+                // Fill reservoir
+                res.push(x);
+            } else {
+                // Randomly replace elements with decreasing probability
+                let mut rng_mut = rng.borrow_mut();
+                let j = rng_mut.gen_range(0..*c);
+                if j < n {
+                    res[j] = x;
+                }
+            }
+
+            cont(())
+        }
+    };
+
+    reduce(transducer, source, (), reducer);
+    Rc::try_unwrap(reservoir)
+        .unwrap_or_else(|_| panic!("Failed to unwrap reservoir"))
+        .into_inner()
+}
+
+/// Group consecutive elements by a key function (SQL-like PARTITION BY).
+///
+/// Unlike `group_by`, this only groups consecutive elements with the same key.
+/// This is more memory-efficient for pre-sorted data and preserves streaming.
+///
+/// # Examples
+///
+/// ```
+/// use orlando::{partition_by, transducer::Identity};
+///
+/// let data = vec![1, 1, 2, 2, 1, 1];
+/// let id = Identity::new();
+/// let groups = partition_by(&id, data, |x| *x);
+///
+/// assert_eq!(groups.len(), 3);
+/// assert_eq!(groups[0], vec![1, 1]);
+/// assert_eq!(groups[1], vec![2, 2]);
+/// assert_eq!(groups[2], vec![1, 1]);
+/// ```
+///
+/// ```
+/// use orlando::{partition_by, Map};
+///
+/// let pipeline = Map::new(|x: i32| x % 3);
+/// let data = vec![3, 6, 9, 1, 4, 7, 2, 5];
+/// let groups = partition_by(&pipeline, data, |x| *x);
+/// // Groups by result: [[0,0,0], [1,1,1], [2,2]]
+/// assert_eq!(groups.len(), 3);
+/// ```
+pub fn partition_by<T, U, K, Iter, F>(
+    transducer: &impl Transducer<T, U>,
+    source: Iter,
+    key_fn: F,
+) -> Vec<Vec<U>>
+where
+    T: 'static,
+    U: 'static + Clone,
+    K: Eq + Hash + 'static,
+    Iter: IntoIterator<Item = T>,
+    F: Fn(&U) -> K + 'static,
+{
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    let result: Rc<RefCell<Vec<Vec<U>>>> = Rc::new(RefCell::new(Vec::new()));
+    let current_group: Rc<RefCell<Vec<U>>> = Rc::new(RefCell::new(Vec::new()));
+    let current_key: Rc<RefCell<Option<K>>> = Rc::new(RefCell::new(None));
+
+    let reducer = {
+        let result = Rc::clone(&result);
+        let current_group = Rc::clone(&current_group);
+        let current_key = Rc::clone(&current_key);
+
+        move |_acc: (), x: U| {
+            let key = key_fn(&x);
+
+            let mut key_ref = current_key.borrow_mut();
+            let mut group_ref = current_group.borrow_mut();
+
+            match key_ref.as_ref() {
+                None => {
+                    // First element
+                    *key_ref = Some(key);
+                    group_ref.push(x);
+                }
+                Some(prev_key) if key == *prev_key => {
+                    // Same group
+                    group_ref.push(x);
+                }
+                Some(_) => {
+                    // New group - save old group and start new one
+                    if !group_ref.is_empty() {
+                        result.borrow_mut().push(group_ref.clone());
+                        group_ref.clear();
+                    }
+                    *key_ref = Some(key);
+                    group_ref.push(x);
+                }
+            }
+
+            cont(())
+        }
+    };
+
+    reduce(transducer, source, (), reducer);
+
+    // Don't forget the last group
+    let final_group = current_group.borrow().clone();
+    if !final_group.is_empty() {
+        result.borrow_mut().push(final_group);
+    }
+
+    Rc::try_unwrap(result)
+        .unwrap_or_else(|_| panic!("Failed to unwrap result"))
+        .into_inner()
+}
+
+/// Find the top K elements using a min-heap (O(n log k) complexity).
+///
+/// This is much more efficient than sorting the entire collection when k << n.
+/// Uses a binary heap to maintain only the top k elements.
+///
+/// # Examples
+///
+/// ```
+/// use orlando::{top_k, transducer::Identity};
+///
+/// let data = vec![3, 1, 4, 1, 5, 9, 2, 6, 5, 3];
+/// let id = Identity::new();
+/// let top3 = top_k(&id, data, 3);
+///
+/// assert_eq!(top3.len(), 3);
+/// assert!(top3.contains(&9));
+/// assert!(top3.contains(&6));
+/// assert!(top3.contains(&5));
+/// ```
+///
+/// ```
+/// use orlando::{top_k, Map};
+///
+/// #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+/// struct Product { sales: i32, name: &'static str }
+///
+/// let pipeline = Map::new(|p: Product| p);
+/// let products = vec![
+///     Product { sales: 100, name: "A" },
+///     Product { sales: 500, name: "B" },
+///     Product { sales: 200, name: "C" },
+/// ];
+///
+/// let top2 = top_k(&pipeline, products, 2);
+/// assert_eq!(top2.len(), 2);
+/// assert_eq!(top2[0].name, "B"); // Highest sales
+/// ```
+pub fn top_k<T, U, Iter>(transducer: &impl Transducer<T, U>, source: Iter, k: usize) -> Vec<U>
+where
+    T: 'static,
+    U: Ord + Clone + 'static,
+    Iter: IntoIterator<Item = T>,
+{
+    use std::cell::RefCell;
+    use std::cmp::Reverse;
+    use std::collections::BinaryHeap;
+    use std::rc::Rc;
+
+    let heap: Rc<RefCell<BinaryHeap<Reverse<U>>>> =
+        Rc::new(RefCell::new(BinaryHeap::with_capacity(k + 1)));
+
+    let reducer = {
+        let heap = Rc::clone(&heap);
+
+        move |_acc: (), x: U| {
+            let mut heap_ref = heap.borrow_mut();
+            if heap_ref.len() < k {
+                heap_ref.push(Reverse(x));
+            } else if let Some(Reverse(min)) = heap_ref.peek() {
+                if &x > min {
+                    heap_ref.push(Reverse(x));
+                    if heap_ref.len() > k {
+                        heap_ref.pop();
+                    }
+                }
+            }
+            cont(())
+        }
+    };
+
+    reduce(transducer, source, (), reducer);
+
+    // Extract and reverse (to get descending order)
+    let final_heap = Rc::try_unwrap(heap)
+        .unwrap_or_else(|_| panic!("Failed to unwrap heap"))
+        .into_inner();
+    let mut result: Vec<U> = final_heap.into_iter().map(|Reverse(x)| x).collect();
+    result.sort_by(|a, b| b.cmp(a)); // Descending order
+    result
+}
+
+/// Count the frequency of each element.
+///
+/// Returns a HashMap mapping each unique element to its count.
+///
+/// # Examples
+///
+/// ```
+/// use orlando::{frequencies, transducer::Identity};
+/// use std::collections::HashMap;
+///
+/// let data = vec![1, 2, 2, 3, 3, 3];
+/// let id = Identity::new();
+/// let freq = frequencies(&id, data);
+///
+/// assert_eq!(freq.get(&1), Some(&1));
+/// assert_eq!(freq.get(&2), Some(&2));
+/// assert_eq!(freq.get(&3), Some(&3));
+/// ```
+///
+/// ```
+/// use orlando::{frequencies, Map};
+///
+/// let pipeline = Map::new(|s: &str| s.to_lowercase());
+/// let words = vec!["Hello", "World", "hello", "WORLD"];
+/// let freq = frequencies(&pipeline, words);
+///
+/// assert_eq!(freq.get("hello"), Some(&2));
+/// assert_eq!(freq.get("world"), Some(&2));
+/// ```
+pub fn frequencies<T, U, Iter>(
+    transducer: &impl Transducer<T, U>,
+    source: Iter,
+) -> HashMap<U, usize>
+where
+    T: 'static,
+    U: Eq + Hash + Clone + 'static,
+    Iter: IntoIterator<Item = T>,
+{
+    let reducer = |mut acc: HashMap<U, usize>, x: U| {
+        *acc.entry(x).or_insert(0) += 1;
+        cont(acc)
+    };
+
+    reduce(transducer, source, HashMap::new(), reducer)
+}
+
+/// Zip two iterators, continuing until both are exhausted (unlike `zip`).
+///
+/// When one iterator is shorter, uses the provided fill value for missing elements.
+///
+/// # Examples
+///
+/// ```
+/// use orlando::zip_longest;
+///
+/// let a = vec![1, 2, 3];
+/// let b = vec![4, 5];
+/// let result = zip_longest(a, b, 0, 0);
+///
+/// assert_eq!(result, vec![(1, 4), (2, 5), (3, 0)]);
+/// ```
+///
+/// ```
+/// use orlando::zip_longest;
+///
+/// let short = vec![1, 2];
+/// let long = vec![10, 20, 30, 40];
+/// let result = zip_longest(short, long, 999, 0);
+///
+/// assert_eq!(result, vec![(1, 10), (2, 20), (999, 30), (999, 40)]);
+/// ```
+pub fn zip_longest<T, U, IterT, IterU>(
+    iter_a: IterT,
+    iter_b: IterU,
+    fill_a: T,
+    fill_b: U,
+) -> Vec<(T, U)>
+where
+    T: Clone,
+    U: Clone,
+    IterT: IntoIterator<Item = T>,
+    IterU: IntoIterator<Item = U>,
+{
+    let mut iter_a = iter_a.into_iter();
+    let mut iter_b = iter_b.into_iter();
+    let mut result = Vec::new();
+
+    loop {
+        match (iter_a.next(), iter_b.next()) {
+            (Some(a), Some(b)) => result.push((a, b)),
+            (Some(a), None) => result.push((a, fill_b.clone())),
+            (None, Some(b)) => result.push((fill_a.clone(), b)),
+            (None, None) => break,
+        }
+    }
+
+    result
+}
+
+/// Compute the cartesian product of two iterators.
+///
+/// Returns all possible pairs (a, b) where a is from the first iterator
+/// and b is from the second iterator.
+///
+/// # Examples
+///
+/// ```
+/// use orlando::cartesian_product;
+///
+/// let colors = vec!["red", "blue"];
+/// let sizes = vec!["S", "M", "L"];
+/// let products = cartesian_product(colors, sizes);
+///
+/// assert_eq!(products.len(), 6);
+/// assert!(products.contains(&("red", "S")));
+/// assert!(products.contains(&("blue", "L")));
+/// ```
+///
+/// ```
+/// use orlando::cartesian_product;
+///
+/// let a = vec![1, 2];
+/// let b = vec![3, 4];
+/// let result = cartesian_product(a, b);
+///
+/// assert_eq!(result, vec![(1, 3), (1, 4), (2, 3), (2, 4)]);
+/// ```
+pub fn cartesian_product<T, U, IterT, IterU>(iter_a: IterT, iter_b: IterU) -> Vec<(T, U)>
+where
+    T: Clone,
+    U: Clone,
+    IterT: IntoIterator<Item = T>,
+    IterU: IntoIterator<Item = U>,
+{
+    let vec_a: Vec<T> = iter_a.into_iter().collect();
+    let vec_b: Vec<U> = iter_b.into_iter().collect();
+
+    let mut result = Vec::with_capacity(vec_a.len() * vec_b.len());
+
+    for a in &vec_a {
+        for b in &vec_b {
+            result.push((a.clone(), b.clone()));
+        }
+    }
+
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

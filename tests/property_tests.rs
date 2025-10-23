@@ -1297,4 +1297,274 @@ proptest! {
 
         prop_assert_eq!(left, right);
     }
+
+    // ========================================
+    // Phase 2b Advanced Operations Property Tests
+    // ========================================
+
+    // Property: interpose increases length by (n-1) for n elements
+    #[test]
+    fn test_interpose_length(vec in prop::collection::vec(any::<i32>(), 1..100)) {
+        use orlando::{Interpose, to_vec};
+
+        let pipeline = Interpose::new(0);
+        let result = to_vec(&pipeline, vec.clone());
+
+        if vec.is_empty() {
+            prop_assert_eq!(result.len(), 0);
+        } else {
+            // For n elements, we have n elements + (n-1) separators = 2n - 1
+            prop_assert_eq!(result.len(), vec.len() * 2 - 1);
+        }
+    }
+
+    // Property: interpose preserves original elements at odd indices
+    #[test]
+    fn test_interpose_preserves_elements(vec in prop::collection::vec(any::<i32>(), 1..50)) {
+        use orlando::{Interpose, to_vec};
+
+        let pipeline = Interpose::new(999);
+        let result = to_vec(&pipeline, vec.clone());
+
+        // Original elements should be at indices 0, 2, 4, ...
+        for (i, &val) in vec.iter().enumerate() {
+            prop_assert_eq!(result[i * 2], val);
+        }
+
+        // Separators should be at indices 1, 3, 5, ...
+        for i in 0..(vec.len() - 1) {
+            prop_assert_eq!(result[i * 2 + 1], 999);
+        }
+    }
+
+    // Property: repeat_each multiplies length by n
+    #[test]
+    fn test_repeat_each_length(vec in prop::collection::vec(any::<i32>(), 0..50), n in 0usize..10) {
+        use orlando::{RepeatEach, to_vec};
+
+        let pipeline = RepeatEach::new(n);
+        let result = to_vec(&pipeline, vec.clone());
+
+        prop_assert_eq!(result.len(), vec.len() * n);
+    }
+
+    // Property: repeat_each produces consecutive repeats
+    #[test]
+    fn test_repeat_each_consecutive(vec in prop::collection::vec(any::<i32>(), 1..20), n in 1usize..5) {
+        use orlando::{RepeatEach, to_vec};
+
+        let pipeline = RepeatEach::new(n);
+        let result = to_vec(&pipeline, vec.clone());
+
+        // Check that each element appears n times consecutively
+        for (i, &val) in vec.iter().enumerate() {
+            for j in 0..n {
+                prop_assert_eq!(result[i * n + j], val);
+            }
+        }
+    }
+
+    // Property: partition_by preserves all elements
+    #[test]
+    fn test_partition_by_preserves_elements(vec in prop::collection::vec(0i32..10, 0..50)) {
+        use orlando::{partition_by, Identity};
+
+        let id = Identity::new();
+        let groups = partition_by(&id, vec.clone(), |x| *x);
+
+        // Flatten groups and verify same elements
+        let flattened: Vec<i32> = groups.into_iter().flatten().collect();
+        prop_assert_eq!(flattened, vec);
+    }
+
+    // Property: partition_by consecutive property
+    #[test]
+    fn test_partition_by_consecutive(vec in prop::collection::vec(0i32..5, 0..30)) {
+        use orlando::{partition_by, Identity};
+
+        let id = Identity::new();
+        let groups = partition_by(&id, vec.clone(), |x| *x);
+
+        // Each group should have all equal elements
+        for group in &groups {
+            if !group.is_empty() {
+                let first = group[0];
+                for &val in group {
+                    prop_assert_eq!(val, first);
+                }
+            }
+        }
+
+        // Adjacent groups should have different keys
+        for i in 0..(groups.len().saturating_sub(1)) {
+            if !groups[i].is_empty() && !groups[i + 1].is_empty() {
+                prop_assert_ne!(groups[i][0], groups[i + 1][0]);
+            }
+        }
+    }
+
+    // Property: top_k returns at most k elements
+    #[test]
+    fn test_top_k_size(vec in prop::collection::vec(any::<i32>(), 0..100), k in 0usize..50) {
+        use orlando::{top_k, Identity};
+
+        let id = Identity::new();
+        let result = top_k(&id, vec.clone(), k);
+
+        prop_assert!(result.len() <= k);
+        prop_assert!(result.len() <= vec.len());
+    }
+
+    // Property: top_k returns largest elements in descending order
+    #[test]
+    fn test_top_k_correctness(vec in prop::collection::vec(0i32..100, 1..50), k in 1usize..20) {
+        use orlando::{top_k, Identity};
+
+        let id = Identity::new();
+        let result = top_k(&id, vec.clone(), k);
+
+        // Result should be in descending order
+        for i in 0..(result.len().saturating_sub(1)) {
+            prop_assert!(result[i] >= result[i + 1]);
+        }
+
+        // All elements in result should be from original vec
+        for &val in &result {
+            prop_assert!(vec.contains(&val));
+        }
+
+        // If we have k elements, they should be the top k
+        if result.len() == k && vec.len() >= k {
+            let mut sorted = vec.clone();
+            sorted.sort_by(|a, b| b.cmp(a));
+            let expected: Vec<i32> = sorted.into_iter().take(k).collect();
+
+            // Compare as sets since order might differ for equal elements
+            use std::collections::HashSet;
+            let result_set: HashSet<_> = result.iter().collect();
+            let expected_set: HashSet<_> = expected.iter().collect();
+            prop_assert_eq!(result_set, expected_set);
+        }
+    }
+
+    // Property: frequencies count sum equals input length
+    #[test]
+    fn test_frequencies_total_count(vec in prop::collection::vec(0i32..20, 0..100)) {
+        use orlando::{frequencies, Identity};
+
+        let id = Identity::new();
+        let freqs = frequencies(&id, vec.clone());
+
+        let total_count: usize = freqs.values().sum();
+        prop_assert_eq!(total_count, vec.len());
+    }
+
+    // Property: frequencies counts are correct
+    #[test]
+    fn test_frequencies_correctness(vec in prop::collection::vec(0i32..10, 0..50)) {
+        use orlando::{frequencies, Identity};
+        use std::collections::HashMap;
+
+        let id = Identity::new();
+        let freqs = frequencies(&id, vec.clone());
+
+        // Manually count frequencies
+        let mut expected: HashMap<i32, usize> = HashMap::new();
+        for &val in &vec {
+            *expected.entry(val).or_insert(0) += 1;
+        }
+
+        prop_assert_eq!(freqs, expected);
+    }
+
+    // Property: zip_longest has length of max(len(a), len(b))
+    #[test]
+    fn test_zip_longest_length(
+        a in prop::collection::vec(any::<i32>(), 0..50),
+        b in prop::collection::vec(any::<i32>(), 0..50)
+    ) {
+        use orlando::zip_longest;
+
+        let result = zip_longest(a.clone(), b.clone(), 0, 0);
+        let expected_len = a.len().max(b.len());
+
+        prop_assert_eq!(result.len(), expected_len);
+    }
+
+    // Property: zip_longest fills with defaults correctly
+    #[test]
+    fn test_zip_longest_fills(
+        a in prop::collection::vec(any::<i32>(), 10..20),
+        b in prop::collection::vec(any::<i32>(), 0..5)
+    ) {
+        use orlando::zip_longest;
+
+        let fill_a = -999;
+        let fill_b = -888;
+        let result = zip_longest(a.clone(), b.clone(), fill_a, fill_b);
+
+        // After b runs out, should see fill_b
+        if a.len() > b.len() {
+            for item in result.iter().skip(b.len()) {
+                prop_assert_eq!(item.1, fill_b);
+            }
+        }
+    }
+
+    // Property: cartesian_product has length = len(a) * len(b)
+    #[test]
+    fn test_cartesian_product_length(
+        a in prop::collection::vec(any::<i32>(), 0..20),
+        b in prop::collection::vec(any::<i32>(), 0..20)
+    ) {
+        use orlando::cartesian_product;
+
+        let result = cartesian_product(a.clone(), b.clone());
+        prop_assert_eq!(result.len(), a.len() * b.len());
+    }
+
+    // Property: cartesian_product contains all pairs
+    #[test]
+    fn test_cartesian_product_completeness(
+        a in prop::collection::vec(0i32..5, 0..5),
+        b in prop::collection::vec(0i32..5, 0..5)
+    ) {
+        use orlando::cartesian_product;
+
+        let result = cartesian_product(a.clone(), b.clone());
+
+        // Every combination should exist
+        for &x in &a {
+            for &y in &b {
+                prop_assert!(result.contains(&(x, y)));
+            }
+        }
+    }
+
+    // Property: reservoir_sample returns at most k elements
+    #[test]
+    fn test_reservoir_sample_size(vec in prop::collection::vec(any::<i32>(), 0..100), k in 0usize..50) {
+        use orlando::{reservoir_sample, Identity};
+
+        let id = Identity::new();
+        let result = reservoir_sample(&id, vec.clone(), k);
+
+        prop_assert!(result.len() <= k);
+        prop_assert!(result.len() <= vec.len());
+    }
+
+    // Property: reservoir_sample contains only source elements
+    #[test]
+    fn test_reservoir_sample_membership(vec in prop::collection::vec(0i32..20, 1..100), k in 1usize..30) {
+        use orlando::{reservoir_sample, Identity};
+        use std::collections::HashSet;
+
+        let id = Identity::new();
+        let result = reservoir_sample(&id, vec.clone(), k);
+
+        let source_set: HashSet<_> = vec.iter().collect();
+        for val in &result {
+            prop_assert!(source_set.contains(val));
+        }
+    }
 }

@@ -717,6 +717,139 @@ where
     }
 }
 
+/// Interpose transducer - inserts a separator between elements.
+///
+/// Useful for joining elements with a delimiter while maintaining streaming semantics.
+/// Unlike string join, this works with any type and keeps the separator as an element.
+///
+/// # Examples
+///
+/// ```
+/// use orlando::transforms::Interpose;
+/// use orlando::collectors::to_vec;
+///
+/// let comma = Interpose::new(0);
+/// let result = to_vec(&comma, vec![1, 2, 3]);
+/// assert_eq!(result, vec![1, 0, 2, 0, 3]);
+/// ```
+///
+/// ```
+/// use orlando::transforms::Interpose;
+/// use orlando::collectors::to_vec;
+///
+/// // Works with strings too
+/// let space = Interpose::new(" ".to_string());
+/// let result = to_vec(&space, vec!["hello".to_string(), "world".to_string()]);
+/// assert_eq!(result, vec!["hello", " ", "world"]);
+/// ```
+pub struct Interpose<T> {
+    separator: T,
+    is_first: Rc<RefCell<bool>>,
+}
+
+impl<T> Interpose<T>
+where
+    T: Clone,
+{
+    pub fn new(separator: T) -> Self {
+        Interpose {
+            separator,
+            is_first: Rc::new(RefCell::new(true)),
+        }
+    }
+}
+
+impl<T> Transducer<T, T> for Interpose<T>
+where
+    T: Clone + 'static,
+{
+    #[inline(always)]
+    fn apply<Acc, R>(&self, reducer: R) -> Box<dyn Fn(Acc, T) -> Step<Acc>>
+    where
+        R: Fn(Acc, T) -> Step<Acc> + 'static,
+        Acc: 'static,
+    {
+        let separator = self.separator.clone();
+        let is_first = Rc::clone(&self.is_first);
+
+        Box::new(move |acc, val| {
+            let mut first = is_first.borrow_mut();
+            if *first {
+                *first = false;
+                reducer(acc, val)
+            } else {
+                // Emit separator, then the value
+                match reducer(acc, separator.clone()) {
+                    Step::Continue(acc2) => reducer(acc2, val),
+                    Step::Stop(final_acc) => stop(final_acc),
+                }
+            }
+        })
+    }
+}
+
+/// RepeatEach transducer - repeats each element n times.
+///
+/// Useful for data augmentation, sampling, or creating test data patterns.
+///
+/// # Examples
+///
+/// ```
+/// use orlando::transforms::RepeatEach;
+/// use orlando::collectors::to_vec;
+///
+/// let triple = RepeatEach::new(3);
+/// let result = to_vec(&triple, vec![1, 2]);
+/// assert_eq!(result, vec![1, 1, 1, 2, 2, 2]);
+/// ```
+///
+/// ```
+/// use orlando::transforms::RepeatEach;
+/// use orlando::collectors::to_vec;
+///
+/// // Repeat 0 times filters everything out
+/// let none = RepeatEach::new(0);
+/// let result = to_vec(&none, vec![1, 2, 3]);
+/// assert_eq!(result, Vec::<i32>::new());
+/// ```
+pub struct RepeatEach<T> {
+    n: usize,
+    _phantom: PhantomData<T>,
+}
+
+impl<T> RepeatEach<T> {
+    pub fn new(n: usize) -> Self {
+        RepeatEach {
+            n,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<T> Transducer<T, T> for RepeatEach<T>
+where
+    T: Clone + 'static,
+{
+    #[inline(always)]
+    fn apply<Acc, R>(&self, reducer: R) -> Box<dyn Fn(Acc, T) -> Step<Acc>>
+    where
+        R: Fn(Acc, T) -> Step<Acc> + 'static,
+        Acc: 'static,
+    {
+        let n = self.n;
+
+        Box::new(move |mut acc, val| {
+            for _ in 0..n {
+                match reducer(acc, val.clone()) {
+                    Step::Continue(new_acc) => acc = new_acc,
+                    Step::Stop(final_acc) => return stop(final_acc),
+                }
+            }
+            cont(acc)
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

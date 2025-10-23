@@ -94,14 +94,15 @@ pub use transducer::{Compose, Identity, Transducer};
 
 // Re-export common transforms
 pub use transforms::{
-    Chunk, Drop, DropWhile, Filter, FlatMap, Map, Reject, Scan, Take, TakeWhile, Tap, Unique,
-    UniqueBy,
+    Chunk, Drop, DropWhile, Filter, FlatMap, Interpose, Map, Reject, RepeatEach, Scan, Take,
+    TakeWhile, Tap, Unique, UniqueBy,
 };
 
 // Re-export collectors
 pub use collectors::{
-    contains, count, difference, every, find, first, group_by, intersection, last, merge, none,
-    partition, reduce, some, sum, symmetric_difference, to_vec, union, zip, zip_with,
+    cartesian_product, contains, count, difference, every, find, first, frequencies, group_by,
+    intersection, last, merge, none, partition, partition_by, reduce, reservoir_sample, some, sum,
+    symmetric_difference, to_vec, top_k, union, zip, zip_longest, zip_with,
 };
 
 #[cfg(target_arch = "wasm32")]
