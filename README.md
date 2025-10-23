@@ -314,6 +314,7 @@ npm run bench:quick      # Quick benchmarks
 ## Documentation
 
 - **[JavaScript/TypeScript API](docs/api/JAVASCRIPT.md)** - Complete API reference
+- **[Hybrid Composition Guide](docs/HYBRID_COMPOSITION.md)** - Combining transducers with multi-input operations
 - **[Migration Guide](docs/api/MIGRATION.md)** - Convert from array methods to Orlando
 - **[WASM Boundary Performance](docs/WASM_BOUNDARY_PERFORMANCE.md)** - Deep dive: Why every instruction counts
 - **[Optimization Guide](docs/OPTIMIZATIONS.md)** - Performance optimizations and best practices
