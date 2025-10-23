@@ -5,7 +5,7 @@
 
 use crate::step::{cont, Step};
 use crate::transducer::Transducer;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
 /// Execute a transducer over an iterator and collect results into a vector.
@@ -480,6 +480,232 @@ where
         .collect()
 }
 
+/// Merge multiple iterators by interleaving their elements in round-robin fashion.
+///
+/// Takes elements from each iterator in turn until all iterators are exhausted.
+/// If iterators have different lengths, continues with remaining iterators.
+///
+/// # Examples
+///
+/// ```
+/// use orlando::merge;
+///
+/// let a = vec![1, 2, 3];
+/// let b = vec![4, 5, 6];
+/// let result = merge(vec![a, b]);
+/// assert_eq!(result, vec![1, 4, 2, 5, 3, 6]);
+/// ```
+///
+/// ```
+/// use orlando::merge;
+///
+/// // Different length iterators
+/// let a = vec![1, 2];
+/// let b = vec![3, 4, 5, 6];
+/// let result = merge(vec![a, b]);
+/// assert_eq!(result, vec![1, 3, 2, 4, 5, 6]);
+/// ```
+pub fn merge<T, I>(iterators: Vec<I>) -> Vec<T>
+where
+    I: IntoIterator<Item = T>,
+{
+    let mut iters: Vec<_> = iterators.into_iter().map(|i| i.into_iter()).collect();
+    let mut result = Vec::new();
+    let mut active = true;
+
+    while active {
+        active = false;
+        for iter in &mut iters {
+            if let Some(val) = iter.next() {
+                result.push(val);
+                active = true;
+            }
+        }
+    }
+
+    result
+}
+
+/// Compute the intersection of two iterators (elements in both A and B).
+///
+/// Returns elements that appear in both iterators, preserving order from the first iterator.
+/// Duplicates from the first iterator are included if the element exists in the second.
+///
+/// # Examples
+///
+/// ```
+/// use orlando::intersection;
+///
+/// let a = vec![1, 2, 3, 4];
+/// let b = vec![3, 4, 5, 6];
+/// let result = intersection(a, b);
+/// assert_eq!(result, vec![3, 4]);
+/// ```
+///
+/// ```
+/// use orlando::intersection;
+///
+/// let a = vec![1, 2, 2, 3];
+/// let b = vec![2, 3, 4];
+/// let result = intersection(a, b);
+/// assert_eq!(result, vec![2, 2, 3]);
+/// ```
+pub fn intersection<T, IterA, IterB>(iter_a: IterA, iter_b: IterB) -> Vec<T>
+where
+    T: Eq + Hash + Clone,
+    IterA: IntoIterator<Item = T>,
+    IterB: IntoIterator<Item = T>,
+{
+    let set_b: HashSet<T> = iter_b.into_iter().collect();
+    iter_a
+        .into_iter()
+        .filter(|item| set_b.contains(item))
+        .collect()
+}
+
+/// Compute the difference of two iterators (elements in A but not in B).
+///
+/// Returns elements from the first iterator that don't appear in the second,
+/// preserving order from the first iterator.
+///
+/// # Examples
+///
+/// ```
+/// use orlando::difference;
+///
+/// let a = vec![1, 2, 3, 4];
+/// let b = vec![3, 4, 5, 6];
+/// let result = difference(a, b);
+/// assert_eq!(result, vec![1, 2]);
+/// ```
+///
+/// ```
+/// use orlando::difference;
+///
+/// let a = vec![1, 2, 2, 3];
+/// let b = vec![2];
+/// let result = difference(a, b);
+/// assert_eq!(result, vec![1, 3]);
+/// ```
+pub fn difference<T, IterA, IterB>(iter_a: IterA, iter_b: IterB) -> Vec<T>
+where
+    T: Eq + Hash + Clone,
+    IterA: IntoIterator<Item = T>,
+    IterB: IntoIterator<Item = T>,
+{
+    let set_b: HashSet<T> = iter_b.into_iter().collect();
+    iter_a
+        .into_iter()
+        .filter(|item| !set_b.contains(item))
+        .collect()
+}
+
+/// Compute the union of two iterators (unique elements from both A and B).
+///
+/// Returns all unique elements that appear in either iterator.
+/// Order is preserved: all unique elements from A first, then unique elements from B.
+///
+/// # Examples
+///
+/// ```
+/// use orlando::union;
+///
+/// let a = vec![1, 2, 3];
+/// let b = vec![3, 4, 5];
+/// let result = union(a, b);
+/// assert_eq!(result, vec![1, 2, 3, 4, 5]);
+/// ```
+///
+/// ```
+/// use orlando::union;
+///
+/// let a = vec![1, 2, 2, 3];
+/// let b = vec![3, 4, 4, 5];
+/// let result = union(a, b);
+/// assert_eq!(result, vec![1, 2, 3, 4, 5]);
+/// ```
+pub fn union<T, IterA, IterB>(iter_a: IterA, iter_b: IterB) -> Vec<T>
+where
+    T: Eq + Hash + Clone,
+    IterA: IntoIterator<Item = T>,
+    IterB: IntoIterator<Item = T>,
+{
+    let mut seen = HashSet::new();
+    let mut result = Vec::new();
+
+    // Add all unique elements from A
+    for item in iter_a {
+        if seen.insert(item.clone()) {
+            result.push(item);
+        }
+    }
+
+    // Add all unique elements from B that aren't in A
+    for item in iter_b {
+        if seen.insert(item.clone()) {
+            result.push(item);
+        }
+    }
+
+    result
+}
+
+/// Compute the symmetric difference of two iterators (elements in A or B but not both).
+///
+/// Returns elements that appear in exactly one of the two iterators.
+/// Order: unique-to-A elements first, then unique-to-B elements.
+///
+/// # Examples
+///
+/// ```
+/// use orlando::symmetric_difference;
+///
+/// let a = vec![1, 2, 3, 4];
+/// let b = vec![3, 4, 5, 6];
+/// let result = symmetric_difference(a, b);
+/// assert_eq!(result, vec![1, 2, 5, 6]);
+/// ```
+///
+/// ```
+/// use orlando::symmetric_difference;
+///
+/// let a = vec![1, 2];
+/// let b = vec![3, 4];
+/// let result = symmetric_difference(a, b);
+/// assert_eq!(result, vec![1, 2, 3, 4]);
+/// ```
+pub fn symmetric_difference<T, IterA, IterB>(iter_a: IterA, iter_b: IterB) -> Vec<T>
+where
+    T: Eq + Hash + Clone,
+    IterA: IntoIterator<Item = T>,
+    IterB: IntoIterator<Item = T>,
+{
+    let vec_a: Vec<T> = iter_a.into_iter().collect();
+    let vec_b: Vec<T> = iter_b.into_iter().collect();
+
+    let set_a: HashSet<&T> = vec_a.iter().collect();
+    let set_b: HashSet<&T> = vec_b.iter().collect();
+
+    let mut result = Vec::new();
+    let mut seen = HashSet::new();
+
+    // Elements in A but not B (preserving order from A)
+    for item in &vec_a {
+        if !set_b.contains(item) && seen.insert(item) {
+            result.push(item.clone());
+        }
+    }
+
+    // Elements in B but not A (preserving order from B)
+    for item in &vec_b {
+        if !set_a.contains(item) && seen.insert(item) {
+            result.push(item.clone());
+        }
+    }
+
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -727,5 +953,215 @@ mod tests {
         let strings = vec!["a", "b", "c"];
         let result = zip_with(numbers, strings, |n, s| format!("{}{}", n, s));
         assert_eq!(result, vec!["1a", "2b", "3c"]);
+    }
+
+    // Phase 2a: Multi-Input Operations Tests
+
+    #[test]
+    fn test_merge_two_equal_length() {
+        let a = vec![1, 2, 3];
+        let b = vec![4, 5, 6];
+        let result = merge(vec![a, b]);
+        assert_eq!(result, vec![1, 4, 2, 5, 3, 6]);
+    }
+
+    #[test]
+    fn test_merge_different_lengths() {
+        let a = vec![1, 2];
+        let b = vec![3, 4, 5, 6];
+        let result = merge(vec![a, b]);
+        assert_eq!(result, vec![1, 3, 2, 4, 5, 6]);
+    }
+
+    #[test]
+    fn test_merge_three_streams() {
+        let a = vec![1, 2];
+        let b = vec![3, 4];
+        let c = vec![5, 6];
+        let result = merge(vec![a, b, c]);
+        assert_eq!(result, vec![1, 3, 5, 2, 4, 6]);
+    }
+
+    #[test]
+    fn test_merge_empty_stream() {
+        let a = vec![1, 2, 3];
+        let b: Vec<i32> = vec![];
+        let result = merge(vec![a, b]);
+        assert_eq!(result, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_merge_single_stream() {
+        let a = vec![1, 2, 3];
+        let result = merge(vec![a]);
+        assert_eq!(result, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_merge_with_transducers() {
+        // Hybrid composition: process streams, then merge
+        let pipeline_a = Map::new(|x: i32| x * 2);
+        let pipeline_b = Map::new(|x: i32| x + 10);
+
+        let a_result = to_vec(&pipeline_a, vec![1, 2, 3]);
+        let b_result = to_vec(&pipeline_b, vec![1, 2, 3]);
+
+        let merged = merge(vec![a_result, b_result]);
+        assert_eq!(merged, vec![2, 11, 4, 12, 6, 13]);
+    }
+
+    #[test]
+    fn test_intersection_basic() {
+        let a = vec![1, 2, 3, 4];
+        let b = vec![3, 4, 5, 6];
+        let result = intersection(a, b);
+        assert_eq!(result, vec![3, 4]);
+    }
+
+    #[test]
+    fn test_intersection_no_overlap() {
+        let a = vec![1, 2, 3];
+        let b = vec![4, 5, 6];
+        let result: Vec<i32> = intersection(a, b);
+        assert_eq!(result, Vec::<i32>::new());
+    }
+
+    #[test]
+    fn test_intersection_complete_overlap() {
+        let a = vec![1, 2, 3];
+        let b = vec![1, 2, 3];
+        let result = intersection(a, b);
+        assert_eq!(result, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_intersection_preserves_duplicates() {
+        let a = vec![1, 2, 2, 3];
+        let b = vec![2, 3, 4];
+        let result = intersection(a, b);
+        assert_eq!(result, vec![2, 2, 3]);
+    }
+
+    #[test]
+    fn test_intersection_with_transducers() {
+        // Hybrid composition: process then intersect
+        let pipeline = Map::new(|x: i32| x * 2);
+        let a_processed = to_vec(&pipeline, vec![1, 2, 3, 4]);
+        let b_processed = to_vec(&pipeline, vec![3, 4, 5, 6]);
+
+        let result = intersection(a_processed, b_processed);
+        assert_eq!(result, vec![6, 8]); // 3*2=6, 4*2=8
+    }
+
+    #[test]
+    fn test_difference_basic() {
+        let a = vec![1, 2, 3, 4];
+        let b = vec![3, 4, 5, 6];
+        let result = difference(a, b);
+        assert_eq!(result, vec![1, 2]);
+    }
+
+    #[test]
+    fn test_difference_no_overlap() {
+        let a = vec![1, 2, 3];
+        let b = vec![4, 5, 6];
+        let result = difference(a, b);
+        assert_eq!(result, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_difference_complete_overlap() {
+        let a = vec![1, 2, 3];
+        let b = vec![1, 2, 3];
+        let result: Vec<i32> = difference(a, b);
+        assert_eq!(result, Vec::<i32>::new());
+    }
+
+    #[test]
+    fn test_difference_removes_all_occurrences() {
+        let a = vec![1, 2, 2, 3];
+        let b = vec![2];
+        let result = difference(a, b);
+        assert_eq!(result, vec![1, 3]);
+    }
+
+    #[test]
+    fn test_union_basic() {
+        let a = vec![1, 2, 3];
+        let b = vec![3, 4, 5];
+        let result = union(a, b);
+        assert_eq!(result, vec![1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn test_union_no_overlap() {
+        let a = vec![1, 2, 3];
+        let b = vec![4, 5, 6];
+        let result = union(a, b);
+        assert_eq!(result, vec![1, 2, 3, 4, 5, 6]);
+    }
+
+    #[test]
+    fn test_union_complete_overlap() {
+        let a = vec![1, 2, 3];
+        let b = vec![1, 2, 3];
+        let result = union(a, b);
+        assert_eq!(result, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_union_removes_duplicates() {
+        let a = vec![1, 2, 2, 3];
+        let b = vec![3, 4, 4, 5];
+        let result = union(a, b);
+        assert_eq!(result, vec![1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn test_union_empty() {
+        let a: Vec<i32> = vec![];
+        let b = vec![1, 2, 3];
+        let result = union(a, b);
+        assert_eq!(result, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_symmetric_difference_basic() {
+        let a = vec![1, 2, 3, 4];
+        let b = vec![3, 4, 5, 6];
+        let result = symmetric_difference(a, b);
+        assert_eq!(result, vec![1, 2, 5, 6]);
+    }
+
+    #[test]
+    fn test_symmetric_difference_no_overlap() {
+        let a = vec![1, 2];
+        let b = vec![3, 4];
+        let result = symmetric_difference(a, b);
+        assert_eq!(result, vec![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn test_symmetric_difference_complete_overlap() {
+        let a = vec![1, 2, 3];
+        let b = vec![1, 2, 3];
+        let result: Vec<i32> = symmetric_difference(a, b);
+        assert_eq!(result, Vec::<i32>::new());
+    }
+
+    #[test]
+    fn test_symmetric_difference_preserves_order() {
+        let a = vec![4, 3, 2, 1];
+        let b = vec![6, 5, 2, 1];
+        let result = symmetric_difference(a, b);
+        assert_eq!(result, vec![4, 3, 6, 5]);
+    }
+
+    #[test]
+    fn test_symmetric_difference_duplicates() {
+        let a = vec![1, 1, 2, 3];
+        let b = vec![3, 4, 4];
+        let result = symmetric_difference(a, b);
+        assert_eq!(result, vec![1, 2, 4]);
     }
 }

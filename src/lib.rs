@@ -100,8 +100,8 @@ pub use transforms::{
 
 // Re-export collectors
 pub use collectors::{
-    contains, count, every, find, first, group_by, last, none, partition, reduce, some, sum,
-    to_vec, zip, zip_with,
+    contains, count, difference, every, find, first, group_by, intersection, last, merge, none,
+    partition, reduce, some, sum, symmetric_difference, to_vec, union, zip, zip_with,
 };
 
 #[cfg(target_arch = "wasm32")]

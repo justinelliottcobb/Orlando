@@ -1051,3 +1051,250 @@ proptest! {
         prop_assert!(result2.is_empty());
     }
 }
+
+// ============================================================================
+// Phase 2a: Multi-Input Operations Property Tests
+// ============================================================================
+
+proptest! {
+    // Property: Merge preserves all elements
+    #[test]
+    fn test_merge_preserves_all_elements(
+        a in prop::collection::vec(any::<i32>(), 0..50),
+        b in prop::collection::vec(any::<i32>(), 0..50)
+    ) {
+        use orlando::merge;
+
+        let expected_count = a.len() + b.len();
+        let result = merge(vec![a, b]);
+        prop_assert_eq!(result.len(), expected_count);
+    }
+
+    // Property: Merge with single stream is identity
+    #[test]
+    fn test_merge_identity(vec in prop::collection::vec(any::<i32>(), 0..50)) {
+        use orlando::merge;
+
+        let expected = vec.clone();
+        let result = merge(vec![vec]);
+        prop_assert_eq!(result, expected);
+    }
+
+    // Property: Merge alternates elements from equal-length streams
+    #[test]
+    fn test_merge_alternation(vec in prop::collection::vec(any::<i32>(), 1..20)) {
+        use orlando::merge;
+
+        let a = vec.clone();
+        let b: Vec<i32> = vec.iter().map(|x| x + 100).collect();
+        let result = merge(vec![a.clone(), b.clone()]);
+
+        // Check alternation pattern
+        for i in 0..a.len() {
+            prop_assert_eq!(result[i * 2], a[i]);
+            prop_assert_eq!(result[i * 2 + 1], b[i]);
+        }
+    }
+
+    // Property: Intersection is subset of both inputs
+    #[test]
+    fn test_intersection_subset(
+        a in prop::collection::vec(0i32..20, 0..30),
+        b in prop::collection::vec(0i32..20, 0..30)
+    ) {
+        use orlando::intersection;
+        use std::collections::HashSet;
+
+        let result = intersection(a.clone(), b.clone());
+        let set_a: HashSet<_> = a.iter().collect();
+        let set_b: HashSet<_> = b.iter().collect();
+
+        // All result elements must be in both A and B
+        for item in &result {
+            prop_assert!(set_a.contains(item));
+            prop_assert!(set_b.contains(item));
+        }
+    }
+
+    // Property: Intersection is commutative (ignoring order)
+    #[test]
+    fn test_intersection_commutative(
+        a in prop::collection::vec(0i32..20, 0..30),
+        b in prop::collection::vec(0i32..20, 0..30)
+    ) {
+        use orlando::intersection;
+        use std::collections::HashSet;
+
+        let result1: HashSet<_> = intersection(a.clone(), b.clone()).into_iter().collect();
+        let result2: HashSet<_> = intersection(b, a).into_iter().collect();
+
+        prop_assert_eq!(result1, result2);
+    }
+
+    // Property: Intersection with self is self (unique elements)
+    #[test]
+    fn test_intersection_idempotent(vec in prop::collection::vec(0i32..20, 0..30)) {
+        use orlando::intersection;
+
+        let result = intersection(vec.clone(), vec.clone());
+        prop_assert_eq!(result, vec);
+    }
+
+    // Property: Difference result contains no elements from B
+    #[test]
+    fn test_difference_exclusion(
+        a in prop::collection::vec(0i32..20, 0..30),
+        b in prop::collection::vec(0i32..20, 0..30)
+    ) {
+        use orlando::difference;
+        use std::collections::HashSet;
+
+        let result = difference(a, b.clone());
+        let set_b: HashSet<_> = b.into_iter().collect();
+
+        // No element in result should be in B
+        for item in &result {
+            prop_assert!(!set_b.contains(item));
+        }
+    }
+
+    // Property: Difference with empty set is identity
+    #[test]
+    fn test_difference_identity(vec in prop::collection::vec(any::<i32>(), 0..50)) {
+        use orlando::difference;
+
+        let empty: Vec<i32> = vec![];
+        let result = difference(vec.clone(), empty);
+        prop_assert_eq!(result, vec);
+    }
+
+    // Property: Difference with self is empty
+    #[test]
+    fn test_difference_self_empty(vec in prop::collection::vec(0i32..20, 0..30)) {
+        use orlando::difference;
+
+        let result: Vec<i32> = difference(vec.clone(), vec);
+        prop_assert!(result.is_empty());
+    }
+
+    // Property: Union contains all unique elements from both sets
+    #[test]
+    fn test_union_contains_all(
+        a in prop::collection::vec(0i32..20, 0..30),
+        b in prop::collection::vec(0i32..20, 0..30)
+    ) {
+        use orlando::union;
+        use std::collections::HashSet;
+
+        let result = union(a.clone(), b.clone());
+        let result_set: HashSet<_> = result.iter().collect();
+        let a_set: HashSet<_> = a.iter().collect();
+        let b_set: HashSet<_> = b.iter().collect();
+
+        // All unique elements from A should be in result
+        for item in &a_set {
+            prop_assert!(result_set.contains(item));
+        }
+
+        // All unique elements from B should be in result
+        for item in &b_set {
+            prop_assert!(result_set.contains(item));
+        }
+    }
+
+    // Property: Union is commutative (ignoring order)
+    #[test]
+    fn test_union_commutative(
+        a in prop::collection::vec(0i32..20, 0..30),
+        b in prop::collection::vec(0i32..20, 0..30)
+    ) {
+        use orlando::union;
+        use std::collections::HashSet;
+
+        let result1: HashSet<_> = union(a.clone(), b.clone()).into_iter().collect();
+        let result2: HashSet<_> = union(b, a).into_iter().collect();
+
+        prop_assert_eq!(result1, result2);
+    }
+
+    // Property: Union with empty is identity
+    #[test]
+    fn test_union_identity(vec in prop::collection::vec(0i32..20, 0..30)) {
+        use orlando::union;
+        use std::collections::HashSet;
+
+        let empty: Vec<i32> = vec![];
+        let result1: HashSet<_> = union(vec.clone(), empty.clone()).into_iter().collect();
+        let result2: HashSet<_> = union(empty, vec.clone()).into_iter().collect();
+        let expected: HashSet<_> = vec.into_iter().collect();
+
+        prop_assert_eq!(result1, expected.clone());
+        prop_assert_eq!(result2, expected);
+    }
+
+    // Property: Symmetric difference is commutative (ignoring order)
+    #[test]
+    fn test_symmetric_difference_commutative(
+        a in prop::collection::vec(0i32..20, 0..30),
+        b in prop::collection::vec(0i32..20, 0..30)
+    ) {
+        use orlando::symmetric_difference;
+        use std::collections::HashSet;
+
+        let result1: HashSet<_> = symmetric_difference(a.clone(), b.clone()).into_iter().collect();
+        let result2: HashSet<_> = symmetric_difference(b, a).into_iter().collect();
+
+        prop_assert_eq!(result1, result2);
+    }
+
+    // Property: Symmetric difference with self is empty
+    #[test]
+    fn test_symmetric_difference_self_empty(vec in prop::collection::vec(0i32..20, 0..30)) {
+        use orlando::symmetric_difference;
+
+        let result: Vec<i32> = symmetric_difference(vec.clone(), vec);
+        prop_assert!(result.is_empty());
+    }
+
+    // Property: Symmetric difference contains no common elements
+    #[test]
+    fn test_symmetric_difference_no_common(
+        a in prop::collection::vec(0i32..20, 0..30),
+        b in prop::collection::vec(0i32..20, 0..30)
+    ) {
+        use orlando::symmetric_difference;
+        use std::collections::HashSet;
+
+        let result = symmetric_difference(a.clone(), b.clone());
+        let set_a: HashSet<_> = a.iter().collect();
+        let set_b: HashSet<_> = b.iter().collect();
+
+        // No element in result should be in both A and B
+        for item in &result {
+            let in_a = set_a.contains(item);
+            let in_b = set_b.contains(item);
+            prop_assert!(in_a ^ in_b); // XOR: in exactly one
+        }
+    }
+
+    // Property: Set operation laws - Union and Intersection
+    #[test]
+    fn test_set_distributive_law(
+        a in prop::collection::vec(0i32..10, 0..15),
+        b in prop::collection::vec(0i32..10, 0..15),
+        c in prop::collection::vec(0i32..10, 0..15)
+    ) {
+        use orlando::{union, intersection};
+        use std::collections::HashSet;
+
+        // A ∩ (B ∪ C) = (A ∩ B) ∪ (A ∩ C)
+        let b_union_c = union(b.clone(), c.clone());
+        let left: HashSet<_> = intersection(a.clone(), b_union_c).into_iter().collect();
+
+        let a_int_b = intersection(a.clone(), b);
+        let a_int_c = intersection(a, c);
+        let right: HashSet<_> = union(a_int_b, a_int_c).into_iter().collect();
+
+        prop_assert_eq!(left, right);
+    }
+}
