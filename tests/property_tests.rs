@@ -1567,4 +1567,213 @@ proptest! {
             prop_assert!(source_set.contains(val));
         }
     }
+
+    // ========================================
+    // Logic Functions Property Tests
+    // ========================================
+
+    // Property: both is commutative
+    #[test]
+    fn test_both_commutative(vec in prop::collection::vec(any::<i32>(), 0..50)) {
+        use orlando::logic::both;
+
+        let p1 = |x: &i32| *x > 0;
+        let p2 = |x: &i32| x % 2 == 0;
+
+        let both_12 = both(p1, p2);
+        let both_21 = both(p2, p1);
+
+        for val in &vec {
+            prop_assert_eq!(both_12(val), both_21(val));
+        }
+    }
+
+    // Property: either is commutative
+    #[test]
+    fn test_either_commutative(vec in prop::collection::vec(any::<i32>(), 0..50)) {
+        use orlando::logic::either;
+
+        let p1 = |x: &i32| *x > 0;
+        let p2 = |x: &i32| x % 2 == 0;
+
+        let either_12 = either(p1, p2);
+        let either_21 = either(p2, p1);
+
+        for val in &vec {
+            prop_assert_eq!(either_12(val), either_21(val));
+        }
+    }
+
+    // Property: complement(complement(p)) == p
+    #[test]
+    fn test_complement_double_negation(vec in prop::collection::vec(any::<i32>(), 0..50)) {
+        use orlando::logic::complement;
+
+        let p = |x: &i32| *x > 0;
+        let not_p = complement(p);
+        let not_not_p = complement(not_p);
+
+        for val in &vec {
+            prop_assert_eq!(p(val), not_not_p(val));
+        }
+    }
+
+    // Property: both(p, p) == p
+    #[test]
+    fn test_both_idempotent(vec in prop::collection::vec(any::<i32>(), 0..50)) {
+        use orlando::logic::both;
+
+        let p = |x: &i32| *x > 0;
+        let both_pp = both(p, p);
+
+        for val in &vec {
+            prop_assert_eq!(p(val), both_pp(val));
+        }
+    }
+
+    // Property: either(p, p) == p
+    #[test]
+    fn test_either_idempotent(vec in prop::collection::vec(any::<i32>(), 0..50)) {
+        use orlando::logic::either;
+
+        let p = |x: &i32| *x > 0;
+        let either_pp = either(p, p);
+
+        for val in &vec {
+            prop_assert_eq!(p(val), either_pp(val));
+        }
+    }
+
+    // Property: When preserves non-matching elements
+    #[test]
+    fn test_when_preserves_non_matching(vec in prop::collection::vec(any::<i32>(), 0..50)) {
+        use orlando::{logic::When, to_vec};
+
+        let when_transform = When::new(|x: &i32| *x > 1000, |x: i32| x.saturating_mul(2));
+        let result = to_vec(&when_transform, vec.clone());
+
+        // Elements <= 1000 should be unchanged
+        for (i, &val) in vec.iter().enumerate() {
+            if val <= 1000 {
+                prop_assert_eq!(result[i], val);
+            }
+        }
+    }
+
+    // Property: Unless preserves matching elements
+    #[test]
+    fn test_unless_preserves_matching(vec in prop::collection::vec(any::<i32>(), 0..50)) {
+        use orlando::{logic::Unless, to_vec};
+
+        let unless_transform = Unless::new(|x: &i32| *x > 1000, |x: i32| x.saturating_add(100));
+        let result = to_vec(&unless_transform, vec.clone());
+
+        // Elements > 1000 should be unchanged
+        for (i, &val) in vec.iter().enumerate() {
+            if val > 1000 {
+                prop_assert_eq!(result[i], val);
+            }
+        }
+    }
+
+    // Property: IfElse always transforms
+    #[test]
+    fn test_if_else_always_transforms(vec in prop::collection::vec(any::<i32>(), 1..50)) {
+        use orlando::{logic::IfElse, to_vec};
+
+        let transform = IfElse::new(
+            |x: &i32| *x >= 0,
+            |x: i32| x + 1,
+            |x: i32| x - 1,
+        );
+        let result = to_vec(&transform, vec.clone());
+
+        // Every element should be transformed
+        prop_assert_eq!(result.len(), vec.len());
+        for (i, &val) in vec.iter().enumerate() {
+            if val >= 0 {
+                prop_assert_eq!(result[i], val + 1);
+            } else {
+                prop_assert_eq!(result[i], val - 1);
+            }
+        }
+    }
+
+    // Property: De Morgan's Laws - not(p and q) == (not p) or (not q)
+    #[test]
+    fn test_de_morgan_and(vec in prop::collection::vec(any::<i32>(), 0..50)) {
+        use orlando::logic::{both, complement, either};
+
+        let p = |x: &i32| *x > 0;
+        let q = |x: &i32| x % 2 == 0;
+
+        let not_both = complement(both(p, q));
+        let not_p_or_not_q = either(complement(p), complement(q));
+
+        for val in &vec {
+            prop_assert_eq!(not_both(val), not_p_or_not_q(val));
+        }
+    }
+
+    // Property: De Morgan's Laws - not(p or q) == (not p) and (not q)
+    #[test]
+    fn test_de_morgan_or(vec in prop::collection::vec(any::<i32>(), 0..50)) {
+        use orlando::logic::{both, complement, either};
+
+        let p = |x: &i32| *x > 0;
+        let q = |x: &i32| x % 2 == 0;
+
+        let not_either = complement(either(p, q));
+        let not_p_and_not_q = both(complement(p), complement(q));
+
+        for val in &vec {
+            prop_assert_eq!(not_either(val), not_p_and_not_q(val));
+        }
+    }
+
+    // Property: When composed with Filter
+    #[test]
+    fn test_when_with_filter_equivalence(vec in prop::collection::vec(0i32..100, 0..50)) {
+        use orlando::{logic::When, to_vec};
+
+        // When followed by identity should equal Filter + Map
+        let when_pipeline = When::new(|x: &i32| *x > 50, |x: i32| x.saturating_mul(2));
+        let result1 = to_vec(&when_pipeline, vec.clone());
+
+        // Manually simulate: keep all, but transform some
+        let mut result2 = vec.clone();
+        for val in &mut result2 {
+            if *val > 50 {
+                *val = val.saturating_mul(2);
+            }
+        }
+
+        prop_assert_eq!(result1, result2);
+    }
+
+    // Property: all_pass with empty list is always true
+    #[test]
+    fn test_all_pass_empty_always_true(vec in prop::collection::vec(any::<i32>(), 0..20)) {
+        use orlando::logic::{all_pass, PredicateVec};
+
+        let predicates: PredicateVec<i32> = vec![];
+        let always_true = all_pass(predicates);
+
+        for val in &vec {
+            prop_assert!(always_true(val));
+        }
+    }
+
+    // Property: any_pass with empty list is always false
+    #[test]
+    fn test_any_pass_empty_always_false(vec in prop::collection::vec(any::<i32>(), 0..20)) {
+        use orlando::logic::{any_pass, PredicateVec};
+
+        let predicates: PredicateVec<i32> = vec![];
+        let always_false = any_pass(predicates);
+
+        for val in &vec {
+            prop_assert!(!always_false(val));
+        }
+    }
 }

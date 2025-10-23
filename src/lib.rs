@@ -80,6 +80,7 @@
 //! Benchmarks show 3-5x performance improvement over pure JavaScript array chaining.
 
 pub mod collectors;
+pub mod logic;
 pub mod simd;
 pub mod step;
 pub mod transducer;
@@ -104,6 +105,9 @@ pub use collectors::{
     intersection, last, merge, none, partition, partition_by, reduce, reservoir_sample, some, sum,
     symmetric_difference, to_vec, top_k, union, zip, zip_longest, zip_with,
 };
+
+// Re-export logic functions and conditional transducers
+pub use logic::{all_pass, any_pass, both, complement, either, IfElse, Unless, When};
 
 #[cfg(target_arch = "wasm32")]
 pub use pipeline::Pipeline;

@@ -506,3 +506,185 @@ fn test_reservoir_sample_with_transform() {
         assert_eq!(value % 2, 0);
     }
 }
+
+// ========================================
+// Logic Functions Tests
+// ========================================
+
+#[test]
+fn test_both_predicate() {
+    use orlando::logic::both;
+
+    let is_positive = |x: &i32| *x > 0;
+    let is_even = |x: &i32| x % 2 == 0;
+    let is_positive_even = both(is_positive, is_even);
+
+    let pipeline = Filter::new(is_positive_even);
+    let result = to_vec(&pipeline, vec![-2, -1, 0, 1, 2, 3, 4, 5, 6]);
+    assert_eq!(result, vec![2, 4, 6]);
+}
+
+#[test]
+fn test_either_predicate() {
+    use orlando::logic::either;
+
+    let is_small = |x: &i32| *x < 10;
+    let is_large = |x: &i32| *x > 90;
+    let is_extreme = either(is_small, is_large);
+
+    let pipeline = Filter::new(is_extreme);
+    let result = to_vec(&pipeline, vec![5, 25, 50, 75, 95]);
+    assert_eq!(result, vec![5, 95]);
+}
+
+#[test]
+fn test_complement_predicate() {
+    use orlando::logic::complement;
+
+    let is_even = |x: &i32| x % 2 == 0;
+    let is_odd = complement(is_even);
+
+    let pipeline = Filter::new(is_odd);
+    let result = to_vec(&pipeline, vec![1, 2, 3, 4, 5, 6]);
+    assert_eq!(result, vec![1, 3, 5]);
+}
+
+#[test]
+fn test_all_pass_predicate() {
+    use orlando::logic::{all_pass, PredicateVec};
+
+    let predicates: PredicateVec<i32> = vec![
+        Box::new(|x: &i32| *x > 0),
+        Box::new(|x: &i32| *x < 100),
+        Box::new(|x: &i32| x % 2 == 0),
+    ];
+
+    let is_valid = all_pass(predicates);
+    let pipeline = Filter::new(is_valid);
+    let result = to_vec(&pipeline, vec![-10, 3, 20, 50, 101, 150]);
+    assert_eq!(result, vec![20, 50]);
+}
+
+#[test]
+fn test_any_pass_predicate() {
+    use orlando::logic::{any_pass, PredicateVec};
+
+    let predicates: PredicateVec<i32> = vec![
+        Box::new(|x: &i32| *x == 0),
+        Box::new(|x: &i32| x % 10 == 0),
+        Box::new(|x: &i32| *x > 100),
+    ];
+
+    let is_special = any_pass(predicates);
+    let pipeline = Filter::new(is_special);
+    let result = to_vec(&pipeline, vec![0, 7, 20, 50, 150]);
+    assert_eq!(result, vec![0, 20, 50, 150]);
+}
+
+#[test]
+fn test_when_transducer() {
+    use orlando::logic::When;
+
+    let double_if_positive = When::new(|x: &i32| *x > 0, |x: i32| x * 2);
+    let result = to_vec(&double_if_positive, vec![-5, -2, 0, 3, 7]);
+    assert_eq!(result, vec![-5, -2, 0, 6, 14]);
+}
+
+#[test]
+fn test_unless_transducer() {
+    use orlando::logic::Unless;
+
+    let zero_if_negative = Unless::new(|x: &i32| *x >= 0, |_| 0);
+    let result = to_vec(&zero_if_negative, vec![-5, -2, 0, 3, 7]);
+    assert_eq!(result, vec![0, 0, 0, 3, 7]);
+}
+
+#[test]
+fn test_if_else_transducer() {
+    use orlando::logic::IfElse;
+
+    let transform = IfElse::new(
+        |x: &i32| *x >= 0,
+        |x: i32| x * 2, // double if positive
+        |x: i32| x / 2, // halve if negative
+    );
+    let result = to_vec(&transform, vec![-10, -4, 0, 5, 8]);
+    assert_eq!(result, vec![-5, -2, 0, 10, 16]);
+}
+
+#[test]
+fn test_when_composition() {
+    use orlando::logic::When;
+
+    // When composed with Map
+    let pipeline = Map::new(|x: i32| x * 2).compose(When::new(|x: &i32| *x > 10, |x: i32| x + 100));
+
+    let result = to_vec(&pipeline, vec![1, 5, 10, 15]);
+    // 1*2=2, 5*2=10, 10*2=20 -> 120, 15*2=30 -> 130
+    assert_eq!(result, vec![2, 10, 120, 130]);
+}
+
+#[test]
+fn test_if_else_with_filter() {
+    use orlando::logic::IfElse;
+
+    // Transform then filter
+    let pipeline = IfElse::new(|x: &i32| *x % 2 == 0, |x: i32| x / 2, |x: i32| x * 3)
+        .compose(Filter::new(|x: &i32| *x > 5));
+
+    let result = to_vec(&pipeline, vec![2, 3, 4, 5, 10]);
+    // 2/2=1, 3*3=9, 4/2=2, 5*3=15, 10/2=5
+    // Filter > 5: [9, 15]
+    assert_eq!(result, vec![9, 15]);
+}
+
+#[test]
+fn test_nested_logic_predicates() {
+    use orlando::logic::{both, either};
+
+    // (positive AND even) OR (negative AND odd)
+    let is_positive_even = both(|x: &i32| *x > 0, |x: &i32| x % 2 == 0);
+    let is_negative_odd = both(|x: &i32| *x < 0, |x: &i32| x % 2 != 0);
+    let complex_pred = either(is_positive_even, is_negative_odd);
+
+    let pipeline = Filter::new(complex_pred);
+    let result = to_vec(&pipeline, vec![-4, -3, -2, -1, 0, 1, 2, 3, 4]);
+    // Positive evens: 2, 4
+    // Negative odds: -3, -1
+    assert_eq!(result, vec![-3, -1, 2, 4]);
+}
+
+#[test]
+fn test_when_with_take() {
+    use orlando::logic::When;
+
+    // When should respect early termination
+    let pipeline = When::new(|x: &i32| *x > 0, |x: i32| x * 10).compose(Take::new(3));
+
+    let result = to_vec(&pipeline, vec![-1, 2, -3, 4, 5, 6]);
+    // -1, 20, -3 (take 3)
+    assert_eq!(result, vec![-1, 20, -3]);
+}
+
+#[test]
+fn test_complex_logic_pipeline() {
+    use orlando::logic::{all_pass, IfElse, PredicateVec};
+
+    // Multi-stage validation and transformation
+    let is_valid_range: PredicateVec<i32> =
+        vec![Box::new(|x: &i32| *x > -100), Box::new(|x: &i32| *x < 100)];
+
+    let pipeline = Filter::new(all_pass(is_valid_range))
+        .compose(IfElse::new(
+            |x: &i32| *x >= 0,
+            |x: i32| x + 10,
+            |x: i32| x - 10,
+        ))
+        .compose(Filter::new(|x: &i32| x.abs() > 5));
+
+    let result = to_vec(&pipeline, vec![-50, -2, 0, 3, 50, 150]);
+    // Filter -100..100: [-50, -2, 0, 3, 50]
+    // Transform: [-60, -12, 10, 13, 60]
+    // Filter abs > 5: [-60, -12, 10, 13, 60]
+    assert_eq!(result, vec![-60, -12, 10, 13, 60]);
+}
