@@ -4,6 +4,7 @@
 //! that can be called from JavaScript via WASM.
 
 use js_sys::{Array, Function};
+use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use web_sys::console;
 
@@ -30,14 +31,20 @@ pub struct Pipeline {
 }
 
 /// Internal representation of pipeline operations
+#[derive(Clone)]
 enum Operation {
-    Map(Box<dyn Fn(JsValue) -> JsValue>),
-    Filter(Box<dyn Fn(&JsValue) -> bool>),
+    Map(Rc<dyn Fn(JsValue) -> JsValue>),
+    Filter(Rc<dyn Fn(&JsValue) -> bool>),
+    /// Fused Map + Filter for better performance
+    MapFilter {
+        map: Rc<dyn Fn(JsValue) -> JsValue>,
+        filter: Rc<dyn Fn(&JsValue) -> bool>,
+    },
     Take(usize),
-    TakeWhile(Box<dyn Fn(&JsValue) -> bool>),
+    TakeWhile(Rc<dyn Fn(&JsValue) -> bool>),
     Drop(usize),
-    DropWhile(Box<dyn Fn(&JsValue) -> bool>),
-    Tap(Box<dyn Fn(&JsValue)>),
+    DropWhile(Rc<dyn Fn(&JsValue) -> bool>),
+    Tap(Rc<dyn Fn(&JsValue)>),
 }
 
 #[wasm_bindgen]
@@ -58,11 +65,14 @@ impl Pipeline {
     #[wasm_bindgen]
     pub fn map(&self, f: &Function) -> Pipeline {
         let f = f.clone();
-        let mut ops = self.operations.clone_operations();
-        ops.push(Operation::Map(Box::new(move |val| {
+        let mut ops = self.operations.clone();
+
+        let map_fn = Rc::new(move |val: JsValue| -> JsValue {
             let this = JsValue::null();
             f.call1(&this, &val).unwrap_or(JsValue::undefined())
-        })));
+        }) as Rc<dyn Fn(JsValue) -> JsValue>;
+
+        ops.push(Operation::Map(map_fn));
         Pipeline { operations: ops }
     }
 
@@ -74,14 +84,27 @@ impl Pipeline {
     #[wasm_bindgen]
     pub fn filter(&self, pred: &Function) -> Pipeline {
         let pred = pred.clone();
-        let mut ops = self.operations.clone_operations();
-        ops.push(Operation::Filter(Box::new(move |val| {
+        let mut ops = self.operations.clone();
+
+        let filter_fn = Rc::new(move |val: &JsValue| -> bool {
             let this = JsValue::null();
             match pred.call1(&this, val) {
                 Ok(result) => result.as_bool().unwrap_or(false),
                 Err(_) => false,
             }
-        })));
+        }) as Rc<dyn Fn(&JsValue) -> bool>;
+
+        // OPTIMIZATION: Fuse Map + Filter into a single operation
+        // This reduces function call overhead and improves cache locality
+        if let Some(Operation::Map(map_fn)) = ops.pop() {
+            ops.push(Operation::MapFilter {
+                map: map_fn,
+                filter: filter_fn,
+            });
+        } else {
+            ops.push(Operation::Filter(filter_fn));
+        }
+
         Pipeline { operations: ops }
     }
 
@@ -92,7 +115,7 @@ impl Pipeline {
     /// * `n` - Number of elements to take
     #[wasm_bindgen]
     pub fn take(&self, n: usize) -> Pipeline {
-        let mut ops = self.operations.clone_operations();
+        let mut ops = self.operations.clone();
         ops.push(Operation::Take(n));
         Pipeline { operations: ops }
     }
@@ -105,8 +128,8 @@ impl Pipeline {
     #[wasm_bindgen(js_name = takeWhile)]
     pub fn take_while(&self, pred: &Function) -> Pipeline {
         let pred = pred.clone();
-        let mut ops = self.operations.clone_operations();
-        ops.push(Operation::TakeWhile(Box::new(move |val| {
+        let mut ops = self.operations.clone();
+        ops.push(Operation::TakeWhile(Rc::new(move |val| {
             let this = JsValue::null();
             match pred.call1(&this, val) {
                 Ok(result) => result.as_bool().unwrap_or(false),
@@ -123,7 +146,7 @@ impl Pipeline {
     /// * `n` - Number of elements to skip
     #[wasm_bindgen]
     pub fn drop(&self, n: usize) -> Pipeline {
-        let mut ops = self.operations.clone_operations();
+        let mut ops = self.operations.clone();
         ops.push(Operation::Drop(n));
         Pipeline { operations: ops }
     }
@@ -136,8 +159,8 @@ impl Pipeline {
     #[wasm_bindgen(js_name = dropWhile)]
     pub fn drop_while(&self, pred: &Function) -> Pipeline {
         let pred = pred.clone();
-        let mut ops = self.operations.clone_operations();
-        ops.push(Operation::DropWhile(Box::new(move |val| {
+        let mut ops = self.operations.clone();
+        ops.push(Operation::DropWhile(Rc::new(move |val| {
             let this = JsValue::null();
             match pred.call1(&this, val) {
                 Ok(result) => result.as_bool().unwrap_or(false),
@@ -155,8 +178,8 @@ impl Pipeline {
     #[wasm_bindgen]
     pub fn tap(&self, f: &Function) -> Pipeline {
         let f = f.clone();
-        let mut ops = self.operations.clone_operations();
-        ops.push(Operation::Tap(Box::new(move |val| {
+        let mut ops = self.operations.clone();
+        ops.push(Operation::Tap(Rc::new(move |val| {
             let this = JsValue::null();
             let _ = f.call1(&this, val);
         })));
@@ -254,6 +277,14 @@ impl Pipeline {
                         return ProcessResult::Skip;
                     }
                 }
+                // OPTIMIZED: Fused Map + Filter in single operation
+                // This eliminates one function call and one match arm per element
+                Operation::MapFilter { map, filter } => {
+                    val = map(val);
+                    if !filter(&val) {
+                        return ProcessResult::Skip;
+                    }
+                }
                 Operation::Take(n) => {
                     take_count += 1;
                     if take_count > *n {
@@ -298,19 +329,6 @@ enum ProcessResult {
     Continue(JsValue),
     Skip,
     Stop(Option<JsValue>),
-}
-
-// Helper trait to clone operations (since closures aren't Clone)
-trait CloneOperations {
-    fn clone_operations(&self) -> Vec<Operation>;
-}
-
-impl CloneOperations for Vec<Operation> {
-    fn clone_operations(&self) -> Vec<Operation> {
-        // For now, we return an empty vec since cloning closures is complex
-        // In production, you'd use Rc or other strategies
-        Vec::new()
-    }
 }
 
 // Export convenience functions

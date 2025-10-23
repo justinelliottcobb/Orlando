@@ -47,6 +47,7 @@ const result = pipeline.toArray(data);
 - **⚡ Early termination** - Stops processing as soon as possible
 - **🔧 Composable** - Build complex pipelines from simple operations
 - **💪 WASM-powered** - Native performance via WebAssembly
+- **⚡ Automatic fusion** - Map→Filter chains automatically optimized
 - **📦 Tiny** - <50KB compressed WASM bundle
 
 ## Performance
@@ -314,6 +315,9 @@ npm run bench:quick      # Quick benchmarks
 
 - **[JavaScript/TypeScript API](docs/api/JAVASCRIPT.md)** - Complete API reference
 - **[Migration Guide](docs/api/MIGRATION.md)** - Convert from array methods to Orlando
+- **[WASM Boundary Performance](docs/WASM_BOUNDARY_PERFORMANCE.md)** - Deep dive: Why every instruction counts
+- **[Optimization Guide](docs/OPTIMIZATIONS.md)** - Performance optimizations and best practices
+- **[Fusion Optimization](docs/FUSION_OPTIMIZATION.md)** - How Map→Filter chains are automatically optimized
 - **[Examples](examples/)** - Interactive demos and real-world use cases
 
 ## Category Theory Foundation
