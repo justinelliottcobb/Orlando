@@ -993,3 +993,61 @@ proptest! {
         }
     }
 }
+
+// Property: Zip length is min of two input lengths
+proptest! {
+    #[test]
+    fn test_zip_length(a in prop::collection::vec(any::<i32>(), 0..50), b in prop::collection::vec(any::<i32>(), 0..50)) {
+        use orlando::zip;
+
+        let result = zip(a.clone(), b.clone());
+        let expected_len = a.len().min(b.len());
+        prop_assert_eq!(result.len(), expected_len);
+    }
+}
+
+// Property: Zip preserves order and pairing
+proptest! {
+    #[test]
+    fn test_zip_correctness(a in prop::collection::vec(any::<i32>(), 0..50), b in prop::collection::vec(any::<i32>(), 0..50)) {
+        use orlando::zip;
+
+        let result = zip(a.clone(), b.clone());
+
+        // Each pair should match the original elements at that index
+        for (i, (x, y)) in result.iter().enumerate() {
+            prop_assert_eq!(x, &a[i]);
+            prop_assert_eq!(y, &b[i]);
+        }
+    }
+}
+
+// Property: ZipWith applies function correctly
+proptest! {
+    #[test]
+    fn test_zip_with_correctness(a in prop::collection::vec(any::<i32>(), 0..50), b in prop::collection::vec(any::<i32>(), 0..50)) {
+        use orlando::zip_with;
+
+        let result = zip_with(a.clone(), b.clone(), |x, y| x.saturating_add(y));
+
+        // Manually compute expected
+        let expected: Vec<i32> = a.iter().zip(b.iter()).map(|(x, y)| x.saturating_add(*y)).collect();
+        prop_assert_eq!(result, expected);
+    }
+}
+
+// Property: Zip with empty is empty
+proptest! {
+    #[test]
+    fn test_zip_with_empty(_dummy in 0..1usize) {
+        use orlando::zip;
+
+        let a: Vec<i32> = vec![];
+        let b = vec![1, 2, 3];
+        let result1 = zip(a.clone(), b.clone());
+        let result2 = zip(b, a);
+
+        prop_assert!(result1.is_empty());
+        prop_assert!(result2.is_empty());
+    }
+}

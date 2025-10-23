@@ -429,6 +429,57 @@ where
     reduce(transducer, source, false, reducer)
 }
 
+/// Zip two iterators into pairs (helper function, not a transducer).
+///
+/// This doesn't fit the single-input transducer model, so it's implemented
+/// as a standalone helper function. Stops when either iterator is exhausted.
+///
+/// # Examples
+///
+/// ```
+/// use orlando::collectors::zip;
+///
+/// let a = vec![1, 2, 3];
+/// let b = vec!['a', 'b', 'c', 'd'];
+/// let result = zip(a, b);
+/// assert_eq!(result, vec![(1, 'a'), (2, 'b'), (3, 'c')]);
+/// ```
+pub fn zip<T, U, IterT, IterU>(iter_a: IterT, iter_b: IterU) -> Vec<(T, U)>
+where
+    IterT: IntoIterator<Item = T>,
+    IterU: IntoIterator<Item = U>,
+{
+    iter_a.into_iter().zip(iter_b).collect()
+}
+
+/// Zip two iterators with a combining function (helper function, not a transducer).
+///
+/// Like `zip`, but applies a function to combine the elements instead of
+/// creating tuples. Stops when either iterator is exhausted.
+///
+/// # Examples
+///
+/// ```
+/// use orlando::collectors::zip_with;
+///
+/// let a = vec![1, 2, 3];
+/// let b = vec![10, 20, 30];
+/// let result = zip_with(a, b, |x, y| x + y);
+/// assert_eq!(result, vec![11, 22, 33]);
+/// ```
+pub fn zip_with<T, U, V, IterT, IterU, F>(iter_a: IterT, iter_b: IterU, combine: F) -> Vec<V>
+where
+    IterT: IntoIterator<Item = T>,
+    IterU: IntoIterator<Item = U>,
+    F: Fn(T, U) -> V,
+{
+    iter_a
+        .into_iter()
+        .zip(iter_b)
+        .map(|(a, b)| combine(a, b))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -592,5 +643,37 @@ mod tests {
         let id = Identity::<i32>::new();
         assert!(contains(&id, vec![1, 2, 3, 4, 5], &3));
         assert!(!contains(&id, vec![1, 2, 4, 5], &3));
+    }
+
+    #[test]
+    fn test_zip() {
+        let a = vec![1, 2, 3];
+        let b = vec!['a', 'b', 'c', 'd'];
+        let result = zip(a, b);
+        assert_eq!(result, vec![(1, 'a'), (2, 'b'), (3, 'c')]);
+    }
+
+    #[test]
+    fn test_zip_equal_length() {
+        let a = vec![1, 2, 3];
+        let b = vec![4, 5, 6];
+        let result = zip(a, b);
+        assert_eq!(result, vec![(1, 4), (2, 5), (3, 6)]);
+    }
+
+    #[test]
+    fn test_zip_with() {
+        let a = vec![1, 2, 3];
+        let b = vec![10, 20, 30];
+        let result = zip_with(a, b, |x, y| x + y);
+        assert_eq!(result, vec![11, 22, 33]);
+    }
+
+    #[test]
+    fn test_zip_with_different_types() {
+        let numbers = vec![1, 2, 3];
+        let strings = vec!["a", "b", "c"];
+        let result = zip_with(numbers, strings, |n, s| format!("{}{}", n, s));
+        assert_eq!(result, vec!["1a", "2b", "3c"]);
     }
 }
