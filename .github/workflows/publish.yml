@@ -1,0 +1,156 @@
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 0.1.0)'
+        required: true
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish:
+    name: Build and Publish to npm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Extract version from tag
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "VERSION=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            # Remove 'v' prefix from tag (e.g., v0.1.0 -> 0.1.0)
+            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update version in Cargo.toml
+        run: |
+          sed -i 's/^version = .*/version = "${{ steps.get_version.outputs.VERSION }}"/' Cargo.toml
+
+      - name: Update version in package.json
+        run: |
+          npm version ${{ steps.get_version.outputs.VERSION }} --no-git-tag-version
+
+      - name: Run tests
+        run: cargo test --all-features --target x86_64-unknown-linux-gnu
+
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Run rustfmt check
+        run: cargo fmt --all -- --check
+
+      - name: Build WASM package (release)
+        run: wasm-pack build --release --target web --out-dir pkg
+
+      - name: Verify package contents
+        run: |
+          echo "📦 Package contents:"
+          ls -lah pkg/
+          echo ""
+          echo "📄 package.json:"
+          cat pkg/package.json
+
+      - name: Run WASM tests
+        run: wasm-pack test --headless --firefox
+
+      - name: Publish to npm (dry run)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          cd pkg
+          npm publish --dry-run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish to npm
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        run: |
+          cd pkg
+          npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            pkg/*.wasm
+            pkg/*.js
+            pkg/*.ts
+          generate_release_notes: true
+          body: |
+            ## Orlando v${{ steps.get_version.outputs.VERSION }}
+
+            High-performance transducers for JavaScript via WebAssembly.
+
+            ### Installation
+
+            ```bash
+            npm install orlando-transducers@${{ steps.get_version.outputs.VERSION }}
+            ```
+
+            ### What's Changed
+
+            See the full changelog in the commits below.
+
+            ### Documentation
+
+            - [API Documentation](https://github.com/justinelliottcobb/Orlando/blob/main/docs/api/JAVASCRIPT.md)
+            - [Examples](https://github.com/justinelliottcobb/Orlando/tree/main/examples)
+            - [README](https://github.com/justinelliottcobb/Orlando/blob/main/README.md)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Report success
+        if: success()
+        run: |
+          echo "✅ Successfully published orlando-transducers@${{ steps.get_version.outputs.VERSION }} to npm!"
+          echo "📦 Package: https://www.npmjs.com/package/orlando-transducers"
+          echo "🏷️  Version: ${{ steps.get_version.outputs.VERSION }}"

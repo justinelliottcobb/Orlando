@@ -1,0 +1,47 @@
+# Source files (only ship the compiled pkg)
+src/
+target/
+tests/
+benches/
+benchmarks/
+examples/
+docs/
+
+# Rust files
+Cargo.toml
+Cargo.lock
+*.rs
+
+# Git files
+.git/
+.github/
+.gitignore
+
+# Build artifacts
+*.wasm.d
+*.a
+*.so
+*.dylib
+
+# Development files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# CI/CD
+.travis.yml
+.gitlab-ci.yml
+azure-pipelines.yml
+
+# Documentation that's not needed in npm package
+README.md
+CONTRIBUTING.md
+TESTING.md
+PUBLISHING.md
+
+# Other
+node_modules/
+*.log
+.DS_Store

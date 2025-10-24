@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["Elliott Hall"]
 description = "Compositional data transformation with transducers"
 license = "MIT"
-repository = "https://github.com/yourusername/orlando"
+repository = "https://github.com/justinelliottcobb/Orlando"
 keywords = ["transducers", "wasm", "data-transformation", "functional"]
 categories = ["wasm", "data-structures"]
 
