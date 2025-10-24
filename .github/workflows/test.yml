@@ -66,21 +66,19 @@ jobs:
   wasm-test:
     name: WASM Tests
     runs-on: ubuntu-latest
-    # TODO: Fix wasm-bindgen-test configuration - currently failing with "main symbol missing"
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-      
+
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-      
+
       - name: Run WASM tests
-        run: wasm-pack test --headless --firefox
+        run: wasm-pack test --node
 
   coverage:
     name: Code Coverage

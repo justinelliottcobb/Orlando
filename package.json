@@ -10,8 +10,9 @@
   "scripts": {
     "build": "wasm-pack build --target web --out-dir pkg",
     "build:release": "wasm-pack build --release --target web --out-dir pkg",
-    "build:nodejs": "wasm-pack build --target nodejs --out-dir pkg",
-    "test": "wasm-pack test --headless --firefox",
+    "build:nodejs": "wasm-pack build --dev --target nodejs --out-dir pkg",
+    "test": "wasm-pack test --node",
+    "test:firefox": "wasm-pack test --headless --firefox",
     "test:chrome": "wasm-pack test --headless --chrome",
     "bench": "cargo bench",
     "bench:js": "node benchmarks/comparison.js",
