@@ -75,13 +75,20 @@ jobs:
 
       - name: Update version in package.json
         run: |
-          npm version ${{ steps.get_version.outputs.VERSION }} --no-git-tag-version
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          if [ "$CURRENT_VERSION" != "${{ steps.get_version.outputs.VERSION }}" ]; then
+            npm version ${{ steps.get_version.outputs.VERSION }} --no-git-tag-version
+          else
+            echo "Version already set to ${{ steps.get_version.outputs.VERSION }}"
+          fi
 
       - name: Run tests
         run: cargo test --all-features --target x86_64-unknown-linux-gnu
 
       - name: Run clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: |
+          cargo clippy --all-targets --all-features --target x86_64-unknown-linux-gnu -- -D warnings
+          cargo clippy --lib --target wasm32-unknown-unknown -- -D warnings
 
       - name: Run rustfmt check
         run: cargo fmt --all -- --check
@@ -98,7 +105,7 @@ jobs:
           cat pkg/package.json
 
       - name: Run WASM tests
-        run: wasm-pack test --headless --firefox
+        run: wasm-pack test --node
 
       - name: Publish to npm (dry run)
         if: github.event_name == 'workflow_dispatch'
