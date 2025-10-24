@@ -11,6 +11,8 @@ jobs:
   benchmark:
     name: Run Performance Benchmarks
     runs-on: ubuntu-latest
+    # Don't fail PR if benchmarks fail (they're informational)
+    continue-on-error: true
 
     steps:
       - name: Checkout repository
