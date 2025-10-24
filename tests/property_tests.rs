@@ -3,6 +3,8 @@
 //! These tests verify algebraic properties and invariants that should hold
 //! for all transducers, using randomly generated test data.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use orlando::*;
 use proptest::prelude::*;
 

@@ -10,8 +10,9 @@
   "scripts": {
     "build": "wasm-pack build --target web --out-dir pkg",
     "build:release": "wasm-pack build --release --target web --out-dir pkg",
-    "build:nodejs": "wasm-pack build --target nodejs --out-dir pkg",
-    "test": "wasm-pack test --headless --firefox",
+    "build:nodejs": "wasm-pack build --dev --target nodejs --out-dir pkg",
+    "test": "wasm-pack test --node",
+    "test:firefox": "wasm-pack test --headless --firefox",
     "test:chrome": "wasm-pack test --headless --chrome",
     "bench": "cargo bench",
     "bench:js": "node benchmarks/comparison.js",
@@ -21,7 +22,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/orlando.git"
+    "url": "https://github.com/justinelliottcobb/Orlando.git"
   },
   "keywords": [
     "transducers",
@@ -36,9 +37,9 @@
   "author": "Elliott Hall",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/yourusername/orlando/issues"
+    "url": "https://github.com/justinelliottcobb/Orlando/issues"
   },
-  "homepage": "https://github.com/yourusername/orlando#readme",
+  "homepage": "https://github.com/justinelliottcobb/Orlando#readme",
   "devDependencies": {
     "wasm-pack": "^0.12.0",
     "tinybench": "^2.6.0",

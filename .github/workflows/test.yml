@@ -15,8 +15,10 @@ jobs:
     runs-on: \${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        rust: [stable, beta, nightly]
+        # For PRs: only test on Ubuntu + stable
+        # For main: test on all platforms and Rust versions
+        os: \${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest"]') || fromJSON('["ubuntu-latest", "macos-latest", "windows-latest"]') }}
+        rust: \${{ github.event_name == 'pull_request' && fromJSON('["stable"]') || fromJSON('["stable", "beta", "nightly"]') }}
         exclude:
           - os: macos-latest
             rust: beta
@@ -66,21 +68,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-      
+
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-      
+
       - name: Run WASM tests
-        run: wasm-pack test --headless --firefox
+        run: wasm-pack test --node
 
   coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
+    # Only run coverage on main branch pushes
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
       
@@ -116,4 +120,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - run: cargo clippy --all-targets --all-features -- -D warnings
+          targets: wasm32-unknown-unknown
+      - run: cargo clippy --all-targets --all-features --target x86_64-unknown-linux-gnu -- -D warnings
+      - run: cargo clippy --lib --target wasm32-unknown-unknown -- -D warnings
