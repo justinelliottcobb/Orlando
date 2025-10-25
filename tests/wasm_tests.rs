@@ -4,7 +4,7 @@
 
 #![cfg(target_arch = "wasm32")]
 
-use orlando::*;
+use orlando_transducers::*;
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
@@ -84,7 +84,7 @@ fn test_wasm_identity_laws() {
 
 #[wasm_bindgen_test]
 fn test_wasm_step_monad() {
-    use orlando::step::*;
+    use orlando_transducers::step::*;
 
     let c = cont(42);
     assert!(c.is_continue());
@@ -99,7 +99,7 @@ fn test_wasm_step_monad() {
 
 #[wasm_bindgen_test]
 fn test_wasm_simd_operations() {
-    use orlando::simd::*;
+    use orlando_transducers::simd::*;
 
     let data = vec![1.0, 2.0, 3.0, 4.0];
 
@@ -122,7 +122,7 @@ fn test_wasm_simd_operations() {
 #[wasm_bindgen_test]
 fn test_wasm_pipeline_basic() {
     use js_sys::{Array, Function};
-    use orlando::Pipeline;
+    use orlando_transducers::Pipeline;
 
     let pipeline = Pipeline::new();
 
@@ -139,7 +139,7 @@ fn test_wasm_pipeline_basic() {
 #[wasm_bindgen_test]
 fn test_wasm_pipeline_map() {
     use js_sys::{Array, Function};
-    use orlando::Pipeline;
+    use orlando_transducers::Pipeline;
 
     let pipeline = Pipeline::new();
     let map_fn = Function::new_with_args("x", "return x * 2");
@@ -160,7 +160,7 @@ fn test_wasm_pipeline_map() {
 #[wasm_bindgen_test]
 fn test_wasm_pipeline_filter() {
     use js_sys::{Array, Function};
-    use orlando::Pipeline;
+    use orlando_transducers::Pipeline;
 
     let pipeline = Pipeline::new();
     let filter_fn = Function::new_with_args("x", "return x % 2 === 0");
@@ -181,7 +181,7 @@ fn test_wasm_pipeline_filter() {
 #[wasm_bindgen_test]
 fn test_wasm_pipeline_pluck() {
     use js_sys::{Array, Object, Reflect};
-    use orlando::Pipeline;
+    use orlando_transducers::Pipeline;
     use wasm_bindgen::JsValue;
 
     let pipeline = Pipeline::new();
@@ -209,7 +209,7 @@ fn test_wasm_pipeline_pluck() {
 #[wasm_bindgen_test]
 fn test_wasm_pipeline_pluck_missing_property() {
     use js_sys::{Array, Object, Reflect};
-    use orlando::Pipeline;
+    use orlando_transducers::Pipeline;
     use wasm_bindgen::JsValue;
 
     let pipeline = Pipeline::new();
@@ -228,7 +228,7 @@ fn test_wasm_pipeline_pluck_missing_property() {
 #[wasm_bindgen_test]
 fn test_wasm_pipeline_pluck_nested() {
     use js_sys::{Array, Object, Reflect};
-    use orlando::Pipeline;
+    use orlando_transducers::Pipeline;
 
     let pipeline = Pipeline::new();
     let pipeline = pipeline.pluck("value");
@@ -257,7 +257,7 @@ fn test_wasm_pipeline_pluck_nested() {
 #[wasm_bindgen_test]
 fn test_wasm_pipeline_pluck_composition() {
     use js_sys::{Array, Function, Object, Reflect};
-    use orlando::Pipeline;
+    use orlando_transducers::Pipeline;
 
     let pipeline = Pipeline::new();
     let pipeline = pipeline.pluck("age");

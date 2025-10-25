@@ -1,6 +1,6 @@
 //! Integration tests for Orlando transducers.
 
-use orlando::*;
+use orlando_transducers::*;
 
 #[test]
 fn test_map_filter_take_pipeline() {
@@ -513,7 +513,7 @@ fn test_reservoir_sample_with_transform() {
 
 #[test]
 fn test_both_predicate() {
-    use orlando::logic::both;
+    use orlando_transducers::logic::both;
 
     let is_positive = |x: &i32| *x > 0;
     let is_even = |x: &i32| x % 2 == 0;
@@ -526,7 +526,7 @@ fn test_both_predicate() {
 
 #[test]
 fn test_either_predicate() {
-    use orlando::logic::either;
+    use orlando_transducers::logic::either;
 
     let is_small = |x: &i32| *x < 10;
     let is_large = |x: &i32| *x > 90;
@@ -539,7 +539,7 @@ fn test_either_predicate() {
 
 #[test]
 fn test_complement_predicate() {
-    use orlando::logic::complement;
+    use orlando_transducers::logic::complement;
 
     let is_even = |x: &i32| x % 2 == 0;
     let is_odd = complement(is_even);
@@ -551,7 +551,7 @@ fn test_complement_predicate() {
 
 #[test]
 fn test_all_pass_predicate() {
-    use orlando::logic::{all_pass, PredicateVec};
+    use orlando_transducers::logic::{all_pass, PredicateVec};
 
     let predicates: PredicateVec<i32> = vec![
         Box::new(|x: &i32| *x > 0),
@@ -567,7 +567,7 @@ fn test_all_pass_predicate() {
 
 #[test]
 fn test_any_pass_predicate() {
-    use orlando::logic::{any_pass, PredicateVec};
+    use orlando_transducers::logic::{any_pass, PredicateVec};
 
     let predicates: PredicateVec<i32> = vec![
         Box::new(|x: &i32| *x == 0),
@@ -583,7 +583,7 @@ fn test_any_pass_predicate() {
 
 #[test]
 fn test_when_transducer() {
-    use orlando::logic::When;
+    use orlando_transducers::logic::When;
 
     let double_if_positive = When::new(|x: &i32| *x > 0, |x: i32| x * 2);
     let result = to_vec(&double_if_positive, vec![-5, -2, 0, 3, 7]);
@@ -592,7 +592,7 @@ fn test_when_transducer() {
 
 #[test]
 fn test_unless_transducer() {
-    use orlando::logic::Unless;
+    use orlando_transducers::logic::Unless;
 
     let zero_if_negative = Unless::new(|x: &i32| *x >= 0, |_| 0);
     let result = to_vec(&zero_if_negative, vec![-5, -2, 0, 3, 7]);
@@ -601,7 +601,7 @@ fn test_unless_transducer() {
 
 #[test]
 fn test_if_else_transducer() {
-    use orlando::logic::IfElse;
+    use orlando_transducers::logic::IfElse;
 
     let transform = IfElse::new(
         |x: &i32| *x >= 0,
@@ -614,7 +614,7 @@ fn test_if_else_transducer() {
 
 #[test]
 fn test_when_composition() {
-    use orlando::logic::When;
+    use orlando_transducers::logic::When;
 
     // When composed with Map
     let pipeline = Map::new(|x: i32| x * 2).compose(When::new(|x: &i32| *x > 10, |x: i32| x + 100));
@@ -626,7 +626,7 @@ fn test_when_composition() {
 
 #[test]
 fn test_if_else_with_filter() {
-    use orlando::logic::IfElse;
+    use orlando_transducers::logic::IfElse;
 
     // Transform then filter
     let pipeline = IfElse::new(|x: &i32| *x % 2 == 0, |x: i32| x / 2, |x: i32| x * 3)
@@ -640,7 +640,7 @@ fn test_if_else_with_filter() {
 
 #[test]
 fn test_nested_logic_predicates() {
-    use orlando::logic::{both, either};
+    use orlando_transducers::logic::{both, either};
 
     // (positive AND even) OR (negative AND odd)
     let is_positive_even = both(|x: &i32| *x > 0, |x: &i32| x % 2 == 0);
@@ -656,7 +656,7 @@ fn test_nested_logic_predicates() {
 
 #[test]
 fn test_when_with_take() {
-    use orlando::logic::When;
+    use orlando_transducers::logic::When;
 
     // When should respect early termination
     let pipeline = When::new(|x: &i32| *x > 0, |x: i32| x * 10).compose(Take::new(3));
@@ -668,7 +668,7 @@ fn test_when_with_take() {
 
 #[test]
 fn test_complex_logic_pipeline() {
-    use orlando::logic::{all_pass, IfElse, PredicateVec};
+    use orlando_transducers::logic::{all_pass, IfElse, PredicateVec};
 
     // Multi-stage validation and transformation
     let is_valid_range: PredicateVec<i32> =
