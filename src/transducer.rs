@@ -40,7 +40,7 @@ use std::marker::PhantomData;
 /// use orlando_transducers::step::{Step, cont};
 ///
 /// // Identity transducer - passes values through unchanged
-/// let id = orlando::transducer::Identity::<i32>::new();
+/// let id = orlando_transducers::transducer::Identity::<i32>::new();
 /// ```
 pub trait Transducer<In, Out>: Sized {
     /// Apply this transducer to a reducing function.
