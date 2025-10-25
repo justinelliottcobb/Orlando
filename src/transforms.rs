@@ -20,9 +20,9 @@ use std::rc::Rc;
 /// # Examples
 ///
 /// ```
-/// use orlando::transforms::Map;
-/// use orlando::transducer::Transducer;
-/// use orlando::step::cont;
+/// use orlando_transducers::transforms::Map;
+/// use orlando_transducers::transducer::Transducer;
+/// use orlando_transducers::step::cont;
 ///
 /// let double = Map::new(|x: i32| x * 2);
 /// ```
@@ -65,7 +65,7 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::transforms::Filter;
+/// use orlando_transducers::transforms::Filter;
 ///
 /// let evens_only = Filter::new(|x: &i32| x % 2 == 0);
 /// ```
@@ -115,8 +115,8 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::transforms::Reject;
-/// use orlando::collectors::to_vec;
+/// use orlando_transducers::transforms::Reject;
+/// use orlando_transducers::collectors::to_vec;
 ///
 /// let no_evens = Reject::new(|x: &i32| x % 2 == 0);
 /// let result = to_vec(&no_evens, vec![1, 2, 3, 4, 5]);
@@ -170,8 +170,8 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::transforms::Chunk;
-/// use orlando::collectors::to_vec;
+/// use orlando_transducers::transforms::Chunk;
+/// use orlando_transducers::collectors::to_vec;
 ///
 /// let chunker = Chunk::new(2);
 /// let result = to_vec(&chunker, vec![1, 2, 3, 4, 5, 6]);
@@ -236,7 +236,7 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::transforms::Take;
+/// use orlando_transducers::transforms::Take;
 ///
 /// let take_5 = Take::<i32>::new(5);
 /// ```
@@ -291,7 +291,7 @@ impl<T: 'static> Transducer<T, T> for Take<T> {
 /// # Examples
 ///
 /// ```
-/// use orlando::transforms::TakeWhile;
+/// use orlando_transducers::transforms::TakeWhile;
 ///
 /// let take_while_positive = TakeWhile::new(|x: &i32| *x > 0);
 /// ```
@@ -339,7 +339,7 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::transforms::Drop;
+/// use orlando_transducers::transforms::Drop;
 ///
 /// let skip_5 = Drop::<i32>::new(5);
 /// ```
@@ -386,7 +386,7 @@ impl<T: 'static> Transducer<T, T> for Drop<T> {
 /// # Examples
 ///
 /// ```
-/// use orlando::transforms::DropWhile;
+/// use orlando_transducers::transforms::DropWhile;
 ///
 /// let drop_negatives = DropWhile::new(|x: &i32| *x < 0);
 /// ```
@@ -440,7 +440,7 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::transforms::Unique;
+/// use orlando_transducers::transforms::Unique;
 ///
 /// let unique = Unique::<i32>::new();
 /// ```
@@ -493,7 +493,7 @@ impl<T: PartialEq + Clone + 'static> Transducer<T, T> for Unique<T> {
 /// # Examples
 ///
 /// ```
-/// use orlando::transforms::UniqueBy;
+/// use orlando_transducers::transforms::UniqueBy;
 ///
 /// let unique_by_abs = UniqueBy::new(|x: &i32| x.abs());
 /// ```
@@ -549,7 +549,7 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::transforms::Scan;
+/// use orlando_transducers::transforms::Scan;
 ///
 /// // Running sum
 /// let running_sum = Scan::new(0, |acc: &i32, x: &i32| acc + x);
@@ -616,9 +616,9 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::transforms::FlatMap;
-/// use orlando::transducer::Transducer;
-/// use orlando::collectors::to_vec;
+/// use orlando_transducers::transforms::FlatMap;
+/// use orlando_transducers::transducer::Transducer;
+/// use orlando_transducers::collectors::to_vec;
 ///
 /// // Duplicate and increment each element
 /// let flat = FlatMap::new(|x: i32| vec![x, x + 1]);
@@ -677,7 +677,7 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::transforms::Tap;
+/// use orlando_transducers::transforms::Tap;
 ///
 /// let logger = Tap::new(|x: &i32| println!("Value: {}", x));
 /// ```
@@ -725,8 +725,8 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::transforms::Interpose;
-/// use orlando::collectors::to_vec;
+/// use orlando_transducers::transforms::Interpose;
+/// use orlando_transducers::collectors::to_vec;
 ///
 /// let comma = Interpose::new(0);
 /// let result = to_vec(&comma, vec![1, 2, 3]);
@@ -734,8 +734,8 @@ where
 /// ```
 ///
 /// ```
-/// use orlando::transforms::Interpose;
-/// use orlando::collectors::to_vec;
+/// use orlando_transducers::transforms::Interpose;
+/// use orlando_transducers::collectors::to_vec;
 ///
 /// // Works with strings too
 /// let space = Interpose::new(" ".to_string());
@@ -795,8 +795,8 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::transforms::RepeatEach;
-/// use orlando::collectors::to_vec;
+/// use orlando_transducers::transforms::RepeatEach;
+/// use orlando_transducers::collectors::to_vec;
 ///
 /// let triple = RepeatEach::new(3);
 /// let result = to_vec(&triple, vec![1, 2]);
@@ -804,8 +804,8 @@ where
 /// ```
 ///
 /// ```
-/// use orlando::transforms::RepeatEach;
-/// use orlando::collectors::to_vec;
+/// use orlando_transducers::transforms::RepeatEach;
+/// use orlando_transducers::collectors::to_vec;
 ///
 /// // Repeat 0 times filters everything out
 /// let none = RepeatEach::new(0);

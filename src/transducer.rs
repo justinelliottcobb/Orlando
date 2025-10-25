@@ -36,8 +36,8 @@ use std::marker::PhantomData;
 /// # Examples
 ///
 /// ```
-/// use orlando::transducer::Transducer;
-/// use orlando::step::{Step, cont};
+/// use orlando_transducers::transducer::Transducer;
+/// use orlando_transducers::step::{Step, cont};
 ///
 /// // Identity transducer - passes values through unchanged
 /// let id = orlando::transducer::Identity::<i32>::new();

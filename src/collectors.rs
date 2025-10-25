@@ -13,8 +13,8 @@ use std::hash::Hash;
 /// # Examples
 ///
 /// ```
-/// use orlando::collectors::to_vec;
-/// use orlando::transforms::Map;
+/// use orlando_transducers::collectors::to_vec;
+/// use orlando_transducers::transforms::Map;
 ///
 /// let double = Map::new(|x: i32| x * 2);
 /// let result = to_vec(&double, vec![1, 2, 3].into_iter());
@@ -52,9 +52,9 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::collectors::reduce;
-/// use orlando::transforms::Map;
-/// use orlando::step::cont;
+/// use orlando_transducers::collectors::reduce;
+/// use orlando_transducers::transforms::Map;
+/// use orlando_transducers::step::cont;
 ///
 /// let double = Map::new(|x: i32| x * 2);
 /// let sum = reduce(&double, vec![1, 2, 3].into_iter(), 0, |acc, x| cont(acc + x));
@@ -94,8 +94,8 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::collectors::sum;
-/// use orlando::transforms::Map;
+/// use orlando_transducers::collectors::sum;
+/// use orlando_transducers::transforms::Map;
 ///
 /// let double = Map::new(|x: i32| x * 2);
 /// let result = sum(&double, vec![1, 2, 3].into_iter());
@@ -115,8 +115,8 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::collectors::count;
-/// use orlando::transforms::Filter;
+/// use orlando_transducers::collectors::count;
+/// use orlando_transducers::transforms::Filter;
 ///
 /// let evens = Filter::new(|x: &i32| x % 2 == 0);
 /// let result = count(&evens, vec![1, 2, 3, 4, 5].into_iter());
@@ -136,8 +136,8 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::collectors::first;
-/// use orlando::transforms::Filter;
+/// use orlando_transducers::collectors::first;
+/// use orlando_transducers::transforms::Filter;
 ///
 /// let evens = Filter::new(|x: &i32| x % 2 == 0);
 /// let result = first(&evens, vec![1, 3, 4, 5].into_iter());
@@ -160,8 +160,8 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::collectors::last;
-/// use orlando::transforms::Filter;
+/// use orlando_transducers::collectors::last;
+/// use orlando_transducers::transforms::Filter;
 ///
 /// let evens = Filter::new(|x: &i32| x % 2 == 0);
 /// let result = last(&evens, vec![2, 3, 4, 5, 6].into_iter());
@@ -181,8 +181,8 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::collectors::every;
-/// use orlando::transducer::Identity;
+/// use orlando_transducers::collectors::every;
+/// use orlando_transducers::transducer::Identity;
 ///
 /// let id = Identity::<i32>::new();
 /// let result = every(&id, vec![2, 4, 6].into_iter(), |x| x % 2 == 0);
@@ -213,8 +213,8 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::collectors::some;
-/// use orlando::transducer::Identity;
+/// use orlando_transducers::collectors::some;
+/// use orlando_transducers::transducer::Identity;
 ///
 /// let id = Identity::<i32>::new();
 /// let result = some(&id, vec![1, 3, 4, 5].into_iter(), |x| x % 2 == 0);
@@ -248,8 +248,8 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::collectors::partition;
-/// use orlando::transducer::Identity;
+/// use orlando_transducers::collectors::partition;
+/// use orlando_transducers::transducer::Identity;
 ///
 /// let id = Identity::<i32>::new();
 /// let (evens, odds) = partition(&id, vec![1, 2, 3, 4, 5].into_iter(), |x| x % 2 == 0);
@@ -287,8 +287,8 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::collectors::find;
-/// use orlando::transducer::Identity;
+/// use orlando_transducers::collectors::find;
+/// use orlando_transducers::transducer::Identity;
 ///
 /// let id = Identity::<i32>::new();
 /// let result = find(&id, vec![1, 3, 4, 5].into_iter(), |x| x % 2 == 0);
@@ -326,8 +326,8 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::collectors::group_by;
-/// use orlando::transducer::Identity;
+/// use orlando_transducers::collectors::group_by;
+/// use orlando_transducers::transducer::Identity;
 /// use std::collections::HashMap;
 ///
 /// let id = Identity::<i32>::new();
@@ -366,8 +366,8 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::collectors::none;
-/// use orlando::transducer::Identity;
+/// use orlando_transducers::collectors::none;
+/// use orlando_transducers::transducer::Identity;
 ///
 /// let id = Identity::<i32>::new();
 /// assert!(none(&id, vec![1, 3, 5, 7].into_iter(), |x| x % 2 == 0)); // No evens
@@ -402,8 +402,8 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::collectors::contains;
-/// use orlando::transducer::Identity;
+/// use orlando_transducers::collectors::contains;
+/// use orlando_transducers::transducer::Identity;
 ///
 /// let id = Identity::<i32>::new();
 /// assert!(contains(&id, vec![1, 2, 3, 4, 5].into_iter(), &3));
@@ -437,7 +437,7 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::collectors::zip;
+/// use orlando_transducers::collectors::zip;
 ///
 /// let a = vec![1, 2, 3];
 /// let b = vec!['a', 'b', 'c', 'd'];
@@ -460,7 +460,7 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::collectors::zip_with;
+/// use orlando_transducers::collectors::zip_with;
 ///
 /// let a = vec![1, 2, 3];
 /// let b = vec![10, 20, 30];
@@ -488,7 +488,7 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::merge;
+/// use orlando_transducers::merge;
 ///
 /// let a = vec![1, 2, 3];
 /// let b = vec![4, 5, 6];
@@ -497,7 +497,7 @@ where
 /// ```
 ///
 /// ```
-/// use orlando::merge;
+/// use orlando_transducers::merge;
 ///
 /// // Different length iterators
 /// let a = vec![1, 2];
@@ -534,7 +534,7 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::intersection;
+/// use orlando_transducers::intersection;
 ///
 /// let a = vec![1, 2, 3, 4];
 /// let b = vec![3, 4, 5, 6];
@@ -543,7 +543,7 @@ where
 /// ```
 ///
 /// ```
-/// use orlando::intersection;
+/// use orlando_transducers::intersection;
 ///
 /// let a = vec![1, 2, 2, 3];
 /// let b = vec![2, 3, 4];
@@ -571,7 +571,7 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::difference;
+/// use orlando_transducers::difference;
 ///
 /// let a = vec![1, 2, 3, 4];
 /// let b = vec![3, 4, 5, 6];
@@ -580,7 +580,7 @@ where
 /// ```
 ///
 /// ```
-/// use orlando::difference;
+/// use orlando_transducers::difference;
 ///
 /// let a = vec![1, 2, 2, 3];
 /// let b = vec![2];
@@ -608,7 +608,7 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::union;
+/// use orlando_transducers::union;
 ///
 /// let a = vec![1, 2, 3];
 /// let b = vec![3, 4, 5];
@@ -617,7 +617,7 @@ where
 /// ```
 ///
 /// ```
-/// use orlando::union;
+/// use orlando_transducers::union;
 ///
 /// let a = vec![1, 2, 2, 3];
 /// let b = vec![3, 4, 4, 5];
@@ -658,7 +658,7 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::symmetric_difference;
+/// use orlando_transducers::symmetric_difference;
 ///
 /// let a = vec![1, 2, 3, 4];
 /// let b = vec![3, 4, 5, 6];
@@ -667,7 +667,7 @@ where
 /// ```
 ///
 /// ```
-/// use orlando::symmetric_difference;
+/// use orlando_transducers::symmetric_difference;
 ///
 /// let a = vec![1, 2];
 /// let b = vec![3, 4];
@@ -719,7 +719,7 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::{reservoir_sample, Map};
+/// use orlando_transducers::{reservoir_sample, Map};
 ///
 /// let pipeline = Map::new(|x: i32| x * 2);
 /// let sample = reservoir_sample(&pipeline, 1..1000, 10);
@@ -728,7 +728,7 @@ where
 /// ```
 ///
 /// ```
-/// use orlando::{reservoir_sample, transducer::Identity};
+/// use orlando_transducers::{reservoir_sample, transducer::Identity};
 ///
 /// // Sample 5 items from large dataset
 /// let id = Identity::<i32>::new();
@@ -793,7 +793,7 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::{partition_by, transducer::Identity};
+/// use orlando_transducers::{partition_by, transducer::Identity};
 ///
 /// let data = vec![1, 1, 2, 2, 1, 1];
 /// let id = Identity::new();
@@ -806,7 +806,7 @@ where
 /// ```
 ///
 /// ```
-/// use orlando::{partition_by, Map};
+/// use orlando_transducers::{partition_by, Map};
 ///
 /// let pipeline = Map::new(|x: i32| x % 3);
 /// let data = vec![3, 6, 9, 1, 4, 7, 2, 5];
@@ -890,7 +890,7 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::{top_k, transducer::Identity};
+/// use orlando_transducers::{top_k, transducer::Identity};
 ///
 /// let data = vec![3, 1, 4, 1, 5, 9, 2, 6, 5, 3];
 /// let id = Identity::new();
@@ -903,7 +903,7 @@ where
 /// ```
 ///
 /// ```
-/// use orlando::{top_k, Map};
+/// use orlando_transducers::{top_k, Map};
 ///
 /// #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 /// struct Product { sales: i32, name: &'static str }
@@ -970,7 +970,7 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::{frequencies, transducer::Identity};
+/// use orlando_transducers::{frequencies, transducer::Identity};
 /// use std::collections::HashMap;
 ///
 /// let data = vec![1, 2, 2, 3, 3, 3];
@@ -983,7 +983,7 @@ where
 /// ```
 ///
 /// ```
-/// use orlando::{frequencies, Map};
+/// use orlando_transducers::{frequencies, Map};
 ///
 /// let pipeline = Map::new(|s: &str| s.to_lowercase());
 /// let words = vec!["Hello", "World", "hello", "WORLD"];
@@ -1016,7 +1016,7 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::zip_longest;
+/// use orlando_transducers::zip_longest;
 ///
 /// let a = vec![1, 2, 3];
 /// let b = vec![4, 5];
@@ -1026,7 +1026,7 @@ where
 /// ```
 ///
 /// ```
-/// use orlando::zip_longest;
+/// use orlando_transducers::zip_longest;
 ///
 /// let short = vec![1, 2];
 /// let long = vec![10, 20, 30, 40];
@@ -1070,7 +1070,7 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::cartesian_product;
+/// use orlando_transducers::cartesian_product;
 ///
 /// let colors = vec!["red", "blue"];
 /// let sizes = vec!["S", "M", "L"];
@@ -1082,7 +1082,7 @@ where
 /// ```
 ///
 /// ```
-/// use orlando::cartesian_product;
+/// use orlando_transducers::cartesian_product;
 ///
 /// let a = vec![1, 2];
 /// let b = vec![3, 4];

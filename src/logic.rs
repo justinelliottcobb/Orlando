@@ -29,7 +29,7 @@ pub type PredicateVec<T> = Vec<BoxedPredicate<T>>;
 /// # Examples
 ///
 /// ```
-/// use orlando::logic::both;
+/// use orlando_transducers::logic::both;
 ///
 /// let is_positive = |x: &i32| *x > 0;
 /// let is_even = |x: &i32| x % 2 == 0;
@@ -54,7 +54,7 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::logic::either;
+/// use orlando_transducers::logic::either;
 ///
 /// let is_small = |x: &i32| *x < 10;
 /// let is_large = |x: &i32| *x > 100;
@@ -80,7 +80,7 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::logic::complement;
+/// use orlando_transducers::logic::complement;
 ///
 /// let is_even = |x: &i32| x % 2 == 0;
 /// let is_odd = complement(is_even);
@@ -103,7 +103,7 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::logic::{all_pass, PredicateVec};
+/// use orlando_transducers::logic::{all_pass, PredicateVec};
 ///
 /// let predicates: PredicateVec<i32> = vec![
 ///     Box::new(|x: &i32| *x > 0),
@@ -129,7 +129,7 @@ pub fn all_pass<T>(predicates: PredicateVec<T>) -> impl Fn(&T) -> bool {
 /// # Examples
 ///
 /// ```
-/// use orlando::logic::{any_pass, PredicateVec};
+/// use orlando_transducers::logic::{any_pass, PredicateVec};
 ///
 /// let predicates: PredicateVec<i32> = vec![
 ///     Box::new(|x: &i32| *x == 0),
@@ -159,8 +159,8 @@ pub fn any_pass<T>(predicates: PredicateVec<T>) -> impl Fn(&T) -> bool {
 /// # Examples
 ///
 /// ```
-/// use orlando::logic::When;
-/// use orlando::collectors::to_vec;
+/// use orlando_transducers::logic::When;
+/// use orlando_transducers::collectors::to_vec;
 ///
 /// let double_if_positive = When::new(|x: &i32| *x > 0, |x: i32| x * 2);
 /// let result = to_vec(&double_if_positive, vec![-1, 2, -3, 4]);
@@ -219,8 +219,8 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::logic::Unless;
-/// use orlando::collectors::to_vec;
+/// use orlando_transducers::logic::Unless;
+/// use orlando_transducers::collectors::to_vec;
 ///
 /// let zero_if_negative = Unless::new(|x: &i32| *x > 0, |_| 0);
 /// let result = to_vec(&zero_if_negative, vec![-1, 2, -3, 4]);
@@ -279,8 +279,8 @@ where
 /// # Examples
 ///
 /// ```
-/// use orlando::logic::IfElse;
-/// use orlando::collectors::to_vec;
+/// use orlando_transducers::logic::IfElse;
+/// use orlando_transducers::collectors::to_vec;
 ///
 /// let abs_with_sign = IfElse::new(
 ///     |x: &i32| *x >= 0,

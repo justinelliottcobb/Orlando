@@ -22,7 +22,7 @@ use std::fmt;
 /// # Examples
 ///
 /// ```
-/// use orlando::step::{cont, stop, is_stopped};
+/// use orlando_transducers::step::{cont, stop, is_stopped};
 ///
 /// let continuing = cont(42);
 /// assert!(!is_stopped(&continuing));
