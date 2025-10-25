@@ -18,7 +18,7 @@ const chalk = require('chalk');
 const Table = require('cli-table3');
 
 // Import Orlando (built with wasm-pack --target nodejs)
-const { Pipeline } = require('../pkg/orlando.js');
+const { Pipeline } = require('../pkg/orlando_transducers.js');
 
 // Benchmark configuration
 const QUICK_MODE = process.argv.includes('--quick');

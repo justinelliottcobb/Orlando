@@ -5,7 +5,7 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use orlando::*;
+use orlando_transducers::*;
 use proptest::prelude::*;
 
 // Property: map(f).map(g) == map(g ∘ f)
@@ -523,7 +523,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_flatmap_flattens(vec in prop::collection::vec(any::<i32>(), 0..50)) {
-        use orlando::FlatMap;
+        use orlando_transducers::FlatMap;
 
         // FlatMap with duplicate function should double the length
         let pipeline = FlatMap::new(|x: i32| vec![x, x]);
@@ -537,7 +537,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_flatmap_identity(vec in prop::collection::vec(any::<i32>(), 0..100)) {
-        use orlando::FlatMap;
+        use orlando_transducers::FlatMap;
 
         // FlatMap with single-element vec is identity
         let pipeline = FlatMap::new(|x: i32| vec![x]);
@@ -551,7 +551,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_flatmap_empty(vec in prop::collection::vec(any::<i32>(), 0..100)) {
-        use orlando::FlatMap;
+        use orlando_transducers::FlatMap;
 
         // FlatMap with empty vec should produce nothing
         let pipeline = FlatMap::new(|_x: i32| Vec::<i32>::new());
@@ -565,7 +565,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_flatmap_preserves_order(vec in prop::collection::vec(0i32..10, 0..50)) {
-        use orlando::FlatMap;
+        use orlando_transducers::FlatMap;
 
         // FlatMap should preserve element order
         let pipeline = FlatMap::new(|x: i32| vec![x, x + 100]);
@@ -582,7 +582,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_flatmap_associativity(vec in prop::collection::vec(0i32..10, 0..20)) {
-        use orlando::FlatMap;
+        use orlando_transducers::FlatMap;
 
         // flatMap(f).flatMap(g) == flatMap(x => flatMap(g, f(x)))
         let f = |x: i32| vec![x, x + 1];
@@ -611,7 +611,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_flatmap_early_termination(vec in prop::collection::vec(any::<i32>(), 1..100), n in 1usize..20) {
-        use orlando::FlatMap;
+        use orlando_transducers::FlatMap;
         use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::Arc;
 
@@ -641,7 +641,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_partition_total_count(vec in prop::collection::vec(any::<i32>(), 0..100)) {
-        use orlando::transducer::Identity;
+        use orlando_transducers::transducer::Identity;
 
         let id = Identity::<i32>::new();
         let (pass, fail) = partition(&id, vec.clone(), |x| x % 2 == 0);
@@ -654,7 +654,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_partition_pass_elements(vec in prop::collection::vec(any::<i32>(), 0..100)) {
-        use orlando::transducer::Identity;
+        use orlando_transducers::transducer::Identity;
 
         let id = Identity::<i32>::new();
         let (pass, _fail) = partition(&id, vec, |x| x % 2 == 0);
@@ -668,7 +668,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_partition_fail_elements(vec in prop::collection::vec(any::<i32>(), 0..100)) {
-        use orlando::transducer::Identity;
+        use orlando_transducers::transducer::Identity;
 
         let id = Identity::<i32>::new();
         let (_pass, fail) = partition(&id, vec, |x| x % 2 == 0);
@@ -682,7 +682,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_partition_preserves_order(vec in prop::collection::vec(0i32..100, 0..50)) {
-        use orlando::transducer::Identity;
+        use orlando_transducers::transducer::Identity;
 
         let id = Identity::<i32>::new();
         let (evens, odds) = partition(&id, vec.clone(), |x| x % 2 == 0);
@@ -700,7 +700,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_partition_with_transform(vec in prop::collection::vec(0i32..50, 0..50)) {
-        use orlando::Map;
+        use orlando_transducers::Map;
 
         // Double each element, then partition by >50
         let double = Map::new(|x: i32| x * 2);
@@ -721,7 +721,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_find_returns_first_match(vec in prop::collection::vec(any::<i32>(), 0..100)) {
-        use orlando::transducer::Identity;
+        use orlando_transducers::transducer::Identity;
 
         let id = Identity::<i32>::new();
         let result = find(&id, vec.clone(), |x| x % 2 == 0);
@@ -741,7 +741,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_find_early_termination(vec in prop::collection::vec(any::<i32>(), 1..100)) {
-        use orlando::transducer::Identity;
+        use orlando_transducers::transducer::Identity;
         use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::Arc;
 
@@ -775,7 +775,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_find_empty_collection(_dummy in 0..1usize) {
-        use orlando::transducer::Identity;
+        use orlando_transducers::transducer::Identity;
 
         let id = Identity::<i32>::new();
         let result = find(&id, Vec::<i32>::new(), |x| x % 2 == 0);
@@ -788,7 +788,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_find_with_transform(vec in prop::collection::vec(0i32..50, 0..50)) {
-        use orlando::Map;
+        use orlando_transducers::Map;
 
         // Double each element, then find first >50
         let double = Map::new(|x: i32| x * 2);
@@ -807,7 +807,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_reject_inverse_of_filter(vec in prop::collection::vec(any::<i32>(), 0..100)) {
-        use orlando::{Reject, Filter};
+        use orlando_transducers::{Reject, Filter};
 
         // Reject(p) == Filter(!p)
         let reject = Reject::new(|x: &i32| x % 2 == 0);
@@ -824,7 +824,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_reject_decreases_length(vec in prop::collection::vec(any::<i32>(), 0..100)) {
-        use orlando::Reject;
+        use orlando_transducers::Reject;
 
         let reject = Reject::new(|x: &i32| x % 2 == 0);
         let result = to_vec(&reject, vec.clone());
@@ -837,7 +837,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_reject_filter_complement(vec in prop::collection::vec(any::<i32>(), 0..100)) {
-        use orlando::{Reject, Filter};
+        use orlando_transducers::{Reject, Filter};
 
         // reject(p).filter(p) should produce empty result
         let pipeline = Reject::new(|x: &i32| x % 2 == 0)
@@ -852,7 +852,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_reject_complement_elements(vec in prop::collection::vec(any::<i32>(), 0..100)) {
-        use orlando::Reject;
+        use orlando_transducers::Reject;
 
         let reject = Reject::new(|x: &i32| x % 2 == 0);
         let result = to_vec(&reject, vec.clone());
@@ -866,7 +866,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_chunk_sizes(vec in prop::collection::vec(any::<i32>(), 0..100), size in 1usize..10) {
-        use orlando::Chunk;
+        use orlando_transducers::Chunk;
 
         let chunker = Chunk::new(size);
         let result = to_vec(&chunker, vec.clone());
@@ -880,7 +880,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_chunk_flatten_roundtrip(vec in prop::collection::vec(any::<i32>(), 0..100), size in 1usize..10) {
-        use orlando::Chunk;
+        use orlando_transducers::Chunk;
 
         let chunker = Chunk::new(size);
         let chunks = to_vec(&chunker, vec.clone());
@@ -898,7 +898,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_chunk_count(vec in prop::collection::vec(any::<i32>(), 0..100), size in 1usize..10) {
-        use orlando::Chunk;
+        use orlando_transducers::Chunk;
 
         let chunker = Chunk::new(size);
         let chunks = to_vec(&chunker, vec.clone());
@@ -912,7 +912,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_chunk_preserves_order(vec in prop::collection::vec(0i32..100, 0..50), size in 1usize..10) {
-        use orlando::Chunk;
+        use orlando_transducers::Chunk;
 
         let chunker = Chunk::new(size);
         let chunks = to_vec(&chunker, vec.clone());
@@ -930,7 +930,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_chunk_with_take(vec in prop::collection::vec(any::<i32>(), 10..100), chunk_size in 2usize..5, n in 1usize..5) {
-        use orlando::{Chunk, Take};
+        use orlando_transducers::{Chunk, Take};
 
         // Chunk then take n chunks
         let pipeline = Chunk::new(chunk_size).compose(Take::new(n));
@@ -950,7 +950,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_group_by_total_count(vec in prop::collection::vec(any::<i32>(), 0..100)) {
-        use orlando::transducer::Identity;
+        use orlando_transducers::transducer::Identity;
 
         let id = Identity::<i32>::new();
         let groups = group_by(&id, vec.clone(), |x| x % 5);
@@ -965,7 +965,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_group_by_correctness(vec in prop::collection::vec(any::<i32>(), 0..100)) {
-        use orlando::transducer::Identity;
+        use orlando_transducers::transducer::Identity;
 
         let id = Identity::<i32>::new();
         let groups = group_by(&id, vec, |x| x % 3);
@@ -981,7 +981,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_group_by_preserves_order(vec in prop::collection::vec(0i32..50, 0..50)) {
-        use orlando::transducer::Identity;
+        use orlando_transducers::transducer::Identity;
 
         let id = Identity::<i32>::new();
         let groups = group_by(&id, vec.clone(), |x| x % 3);
@@ -1000,7 +1000,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_zip_length(a in prop::collection::vec(any::<i32>(), 0..50), b in prop::collection::vec(any::<i32>(), 0..50)) {
-        use orlando::zip;
+        use orlando_transducers::zip;
 
         let result = zip(a.clone(), b.clone());
         let expected_len = a.len().min(b.len());
@@ -1012,7 +1012,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_zip_correctness(a in prop::collection::vec(any::<i32>(), 0..50), b in prop::collection::vec(any::<i32>(), 0..50)) {
-        use orlando::zip;
+        use orlando_transducers::zip;
 
         let result = zip(a.clone(), b.clone());
 
@@ -1028,7 +1028,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_zip_with_correctness(a in prop::collection::vec(any::<i32>(), 0..50), b in prop::collection::vec(any::<i32>(), 0..50)) {
-        use orlando::zip_with;
+        use orlando_transducers::zip_with;
 
         let result = zip_with(a.clone(), b.clone(), |x, y| x.saturating_add(y));
 
@@ -1042,7 +1042,7 @@ proptest! {
 proptest! {
     #[test]
     fn test_zip_with_empty(_dummy in 0..1usize) {
-        use orlando::zip;
+        use orlando_transducers::zip;
 
         let a: Vec<i32> = vec![];
         let b = vec![1, 2, 3];
@@ -1065,7 +1065,7 @@ proptest! {
         a in prop::collection::vec(any::<i32>(), 0..50),
         b in prop::collection::vec(any::<i32>(), 0..50)
     ) {
-        use orlando::merge;
+        use orlando_transducers::merge;
 
         let expected_count = a.len() + b.len();
         let result = merge(vec![a, b]);
@@ -1075,7 +1075,7 @@ proptest! {
     // Property: Merge with single stream is identity
     #[test]
     fn test_merge_identity(vec in prop::collection::vec(any::<i32>(), 0..50)) {
-        use orlando::merge;
+        use orlando_transducers::merge;
 
         let expected = vec.clone();
         let result = merge(vec![vec]);
@@ -1085,7 +1085,7 @@ proptest! {
     // Property: Merge alternates elements from equal-length streams
     #[test]
     fn test_merge_alternation(vec in prop::collection::vec(any::<i32>(), 1..20)) {
-        use orlando::merge;
+        use orlando_transducers::merge;
 
         let a = vec.clone();
         let b: Vec<i32> = vec.iter().map(|x| x + 100).collect();
@@ -1104,7 +1104,7 @@ proptest! {
         a in prop::collection::vec(0i32..20, 0..30),
         b in prop::collection::vec(0i32..20, 0..30)
     ) {
-        use orlando::intersection;
+        use orlando_transducers::intersection;
         use std::collections::HashSet;
 
         let result = intersection(a.clone(), b.clone());
@@ -1124,7 +1124,7 @@ proptest! {
         a in prop::collection::vec(0i32..20, 0..30),
         b in prop::collection::vec(0i32..20, 0..30)
     ) {
-        use orlando::intersection;
+        use orlando_transducers::intersection;
         use std::collections::HashSet;
 
         let result1: HashSet<_> = intersection(a.clone(), b.clone()).into_iter().collect();
@@ -1136,7 +1136,7 @@ proptest! {
     // Property: Intersection with self is self (unique elements)
     #[test]
     fn test_intersection_idempotent(vec in prop::collection::vec(0i32..20, 0..30)) {
-        use orlando::intersection;
+        use orlando_transducers::intersection;
 
         let result = intersection(vec.clone(), vec.clone());
         prop_assert_eq!(result, vec);
@@ -1148,7 +1148,7 @@ proptest! {
         a in prop::collection::vec(0i32..20, 0..30),
         b in prop::collection::vec(0i32..20, 0..30)
     ) {
-        use orlando::difference;
+        use orlando_transducers::difference;
         use std::collections::HashSet;
 
         let result = difference(a, b.clone());
@@ -1163,7 +1163,7 @@ proptest! {
     // Property: Difference with empty set is identity
     #[test]
     fn test_difference_identity(vec in prop::collection::vec(any::<i32>(), 0..50)) {
-        use orlando::difference;
+        use orlando_transducers::difference;
 
         let empty: Vec<i32> = vec![];
         let result = difference(vec.clone(), empty);
@@ -1173,7 +1173,7 @@ proptest! {
     // Property: Difference with self is empty
     #[test]
     fn test_difference_self_empty(vec in prop::collection::vec(0i32..20, 0..30)) {
-        use orlando::difference;
+        use orlando_transducers::difference;
 
         let result: Vec<i32> = difference(vec.clone(), vec);
         prop_assert!(result.is_empty());
@@ -1185,7 +1185,7 @@ proptest! {
         a in prop::collection::vec(0i32..20, 0..30),
         b in prop::collection::vec(0i32..20, 0..30)
     ) {
-        use orlando::union;
+        use orlando_transducers::union;
         use std::collections::HashSet;
 
         let result = union(a.clone(), b.clone());
@@ -1210,7 +1210,7 @@ proptest! {
         a in prop::collection::vec(0i32..20, 0..30),
         b in prop::collection::vec(0i32..20, 0..30)
     ) {
-        use orlando::union;
+        use orlando_transducers::union;
         use std::collections::HashSet;
 
         let result1: HashSet<_> = union(a.clone(), b.clone()).into_iter().collect();
@@ -1222,7 +1222,7 @@ proptest! {
     // Property: Union with empty is identity
     #[test]
     fn test_union_identity(vec in prop::collection::vec(0i32..20, 0..30)) {
-        use orlando::union;
+        use orlando_transducers::union;
         use std::collections::HashSet;
 
         let empty: Vec<i32> = vec![];
@@ -1240,7 +1240,7 @@ proptest! {
         a in prop::collection::vec(0i32..20, 0..30),
         b in prop::collection::vec(0i32..20, 0..30)
     ) {
-        use orlando::symmetric_difference;
+        use orlando_transducers::symmetric_difference;
         use std::collections::HashSet;
 
         let result1: HashSet<_> = symmetric_difference(a.clone(), b.clone()).into_iter().collect();
@@ -1252,7 +1252,7 @@ proptest! {
     // Property: Symmetric difference with self is empty
     #[test]
     fn test_symmetric_difference_self_empty(vec in prop::collection::vec(0i32..20, 0..30)) {
-        use orlando::symmetric_difference;
+        use orlando_transducers::symmetric_difference;
 
         let result: Vec<i32> = symmetric_difference(vec.clone(), vec);
         prop_assert!(result.is_empty());
@@ -1264,7 +1264,7 @@ proptest! {
         a in prop::collection::vec(0i32..20, 0..30),
         b in prop::collection::vec(0i32..20, 0..30)
     ) {
-        use orlando::symmetric_difference;
+        use orlando_transducers::symmetric_difference;
         use std::collections::HashSet;
 
         let result = symmetric_difference(a.clone(), b.clone());
@@ -1286,7 +1286,7 @@ proptest! {
         b in prop::collection::vec(0i32..10, 0..15),
         c in prop::collection::vec(0i32..10, 0..15)
     ) {
-        use orlando::{union, intersection};
+        use orlando_transducers::{union, intersection};
         use std::collections::HashSet;
 
         // A ∩ (B ∪ C) = (A ∩ B) ∪ (A ∩ C)
@@ -1307,7 +1307,7 @@ proptest! {
     // Property: interpose increases length by (n-1) for n elements
     #[test]
     fn test_interpose_length(vec in prop::collection::vec(any::<i32>(), 1..100)) {
-        use orlando::{Interpose, to_vec};
+        use orlando_transducers::{Interpose, to_vec};
 
         let pipeline = Interpose::new(0);
         let result = to_vec(&pipeline, vec.clone());
@@ -1323,7 +1323,7 @@ proptest! {
     // Property: interpose preserves original elements at odd indices
     #[test]
     fn test_interpose_preserves_elements(vec in prop::collection::vec(any::<i32>(), 1..50)) {
-        use orlando::{Interpose, to_vec};
+        use orlando_transducers::{Interpose, to_vec};
 
         let pipeline = Interpose::new(999);
         let result = to_vec(&pipeline, vec.clone());
@@ -1342,7 +1342,7 @@ proptest! {
     // Property: repeat_each multiplies length by n
     #[test]
     fn test_repeat_each_length(vec in prop::collection::vec(any::<i32>(), 0..50), n in 0usize..10) {
-        use orlando::{RepeatEach, to_vec};
+        use orlando_transducers::{RepeatEach, to_vec};
 
         let pipeline = RepeatEach::new(n);
         let result = to_vec(&pipeline, vec.clone());
@@ -1353,7 +1353,7 @@ proptest! {
     // Property: repeat_each produces consecutive repeats
     #[test]
     fn test_repeat_each_consecutive(vec in prop::collection::vec(any::<i32>(), 1..20), n in 1usize..5) {
-        use orlando::{RepeatEach, to_vec};
+        use orlando_transducers::{RepeatEach, to_vec};
 
         let pipeline = RepeatEach::new(n);
         let result = to_vec(&pipeline, vec.clone());
@@ -1369,7 +1369,7 @@ proptest! {
     // Property: partition_by preserves all elements
     #[test]
     fn test_partition_by_preserves_elements(vec in prop::collection::vec(0i32..10, 0..50)) {
-        use orlando::{partition_by, Identity};
+        use orlando_transducers::{partition_by, Identity};
 
         let id = Identity::new();
         let groups = partition_by(&id, vec.clone(), |x| *x);
@@ -1382,7 +1382,7 @@ proptest! {
     // Property: partition_by consecutive property
     #[test]
     fn test_partition_by_consecutive(vec in prop::collection::vec(0i32..5, 0..30)) {
-        use orlando::{partition_by, Identity};
+        use orlando_transducers::{partition_by, Identity};
 
         let id = Identity::new();
         let groups = partition_by(&id, vec.clone(), |x| *x);
@@ -1408,7 +1408,7 @@ proptest! {
     // Property: top_k returns at most k elements
     #[test]
     fn test_top_k_size(vec in prop::collection::vec(any::<i32>(), 0..100), k in 0usize..50) {
-        use orlando::{top_k, Identity};
+        use orlando_transducers::{top_k, Identity};
 
         let id = Identity::new();
         let result = top_k(&id, vec.clone(), k);
@@ -1420,7 +1420,7 @@ proptest! {
     // Property: top_k returns largest elements in descending order
     #[test]
     fn test_top_k_correctness(vec in prop::collection::vec(0i32..100, 1..50), k in 1usize..20) {
-        use orlando::{top_k, Identity};
+        use orlando_transducers::{top_k, Identity};
 
         let id = Identity::new();
         let result = top_k(&id, vec.clone(), k);
@@ -1452,7 +1452,7 @@ proptest! {
     // Property: frequencies count sum equals input length
     #[test]
     fn test_frequencies_total_count(vec in prop::collection::vec(0i32..20, 0..100)) {
-        use orlando::{frequencies, Identity};
+        use orlando_transducers::{frequencies, Identity};
 
         let id = Identity::new();
         let freqs = frequencies(&id, vec.clone());
@@ -1464,7 +1464,7 @@ proptest! {
     // Property: frequencies counts are correct
     #[test]
     fn test_frequencies_correctness(vec in prop::collection::vec(0i32..10, 0..50)) {
-        use orlando::{frequencies, Identity};
+        use orlando_transducers::{frequencies, Identity};
         use std::collections::HashMap;
 
         let id = Identity::new();
@@ -1485,7 +1485,7 @@ proptest! {
         a in prop::collection::vec(any::<i32>(), 0..50),
         b in prop::collection::vec(any::<i32>(), 0..50)
     ) {
-        use orlando::zip_longest;
+        use orlando_transducers::zip_longest;
 
         let result = zip_longest(a.clone(), b.clone(), 0, 0);
         let expected_len = a.len().max(b.len());
@@ -1499,7 +1499,7 @@ proptest! {
         a in prop::collection::vec(any::<i32>(), 10..20),
         b in prop::collection::vec(any::<i32>(), 0..5)
     ) {
-        use orlando::zip_longest;
+        use orlando_transducers::zip_longest;
 
         let fill_a = -999;
         let fill_b = -888;
@@ -1519,7 +1519,7 @@ proptest! {
         a in prop::collection::vec(any::<i32>(), 0..20),
         b in prop::collection::vec(any::<i32>(), 0..20)
     ) {
-        use orlando::cartesian_product;
+        use orlando_transducers::cartesian_product;
 
         let result = cartesian_product(a.clone(), b.clone());
         prop_assert_eq!(result.len(), a.len() * b.len());
@@ -1531,7 +1531,7 @@ proptest! {
         a in prop::collection::vec(0i32..5, 0..5),
         b in prop::collection::vec(0i32..5, 0..5)
     ) {
-        use orlando::cartesian_product;
+        use orlando_transducers::cartesian_product;
 
         let result = cartesian_product(a.clone(), b.clone());
 
@@ -1546,7 +1546,7 @@ proptest! {
     // Property: reservoir_sample returns at most k elements
     #[test]
     fn test_reservoir_sample_size(vec in prop::collection::vec(any::<i32>(), 0..100), k in 0usize..50) {
-        use orlando::{reservoir_sample, Identity};
+        use orlando_transducers::{reservoir_sample, Identity};
 
         let id = Identity::new();
         let result = reservoir_sample(&id, vec.clone(), k);
@@ -1558,7 +1558,7 @@ proptest! {
     // Property: reservoir_sample contains only source elements
     #[test]
     fn test_reservoir_sample_membership(vec in prop::collection::vec(0i32..20, 1..100), k in 1usize..30) {
-        use orlando::{reservoir_sample, Identity};
+        use orlando_transducers::{reservoir_sample, Identity};
         use std::collections::HashSet;
 
         let id = Identity::new();
@@ -1577,7 +1577,7 @@ proptest! {
     // Property: both is commutative
     #[test]
     fn test_both_commutative(vec in prop::collection::vec(any::<i32>(), 0..50)) {
-        use orlando::logic::both;
+        use orlando_transducers::logic::both;
 
         let p1 = |x: &i32| *x > 0;
         let p2 = |x: &i32| x % 2 == 0;
@@ -1593,7 +1593,7 @@ proptest! {
     // Property: either is commutative
     #[test]
     fn test_either_commutative(vec in prop::collection::vec(any::<i32>(), 0..50)) {
-        use orlando::logic::either;
+        use orlando_transducers::logic::either;
 
         let p1 = |x: &i32| *x > 0;
         let p2 = |x: &i32| x % 2 == 0;
@@ -1609,7 +1609,7 @@ proptest! {
     // Property: complement(complement(p)) == p
     #[test]
     fn test_complement_double_negation(vec in prop::collection::vec(any::<i32>(), 0..50)) {
-        use orlando::logic::complement;
+        use orlando_transducers::logic::complement;
 
         let p = |x: &i32| *x > 0;
         let not_p = complement(p);
@@ -1623,7 +1623,7 @@ proptest! {
     // Property: both(p, p) == p
     #[test]
     fn test_both_idempotent(vec in prop::collection::vec(any::<i32>(), 0..50)) {
-        use orlando::logic::both;
+        use orlando_transducers::logic::both;
 
         let p = |x: &i32| *x > 0;
         let both_pp = both(p, p);
@@ -1636,7 +1636,7 @@ proptest! {
     // Property: either(p, p) == p
     #[test]
     fn test_either_idempotent(vec in prop::collection::vec(any::<i32>(), 0..50)) {
-        use orlando::logic::either;
+        use orlando_transducers::logic::either;
 
         let p = |x: &i32| *x > 0;
         let either_pp = either(p, p);
@@ -1649,7 +1649,7 @@ proptest! {
     // Property: When preserves non-matching elements
     #[test]
     fn test_when_preserves_non_matching(vec in prop::collection::vec(any::<i32>(), 0..50)) {
-        use orlando::{logic::When, to_vec};
+        use orlando_transducers::{logic::When, to_vec};
 
         let when_transform = When::new(|x: &i32| *x > 1000, |x: i32| x.saturating_mul(2));
         let result = to_vec(&when_transform, vec.clone());
@@ -1665,7 +1665,7 @@ proptest! {
     // Property: Unless preserves matching elements
     #[test]
     fn test_unless_preserves_matching(vec in prop::collection::vec(any::<i32>(), 0..50)) {
-        use orlando::{logic::Unless, to_vec};
+        use orlando_transducers::{logic::Unless, to_vec};
 
         let unless_transform = Unless::new(|x: &i32| *x > 1000, |x: i32| x.saturating_add(100));
         let result = to_vec(&unless_transform, vec.clone());
@@ -1681,7 +1681,7 @@ proptest! {
     // Property: IfElse always transforms
     #[test]
     fn test_if_else_always_transforms(vec in prop::collection::vec(any::<i32>(), 1..50)) {
-        use orlando::{logic::IfElse, to_vec};
+        use orlando_transducers::{logic::IfElse, to_vec};
 
         let transform = IfElse::new(
             |x: &i32| *x >= 0,
@@ -1704,7 +1704,7 @@ proptest! {
     // Property: De Morgan's Laws - not(p and q) == (not p) or (not q)
     #[test]
     fn test_de_morgan_and(vec in prop::collection::vec(any::<i32>(), 0..50)) {
-        use orlando::logic::{both, complement, either};
+        use orlando_transducers::logic::{both, complement, either};
 
         let p = |x: &i32| *x > 0;
         let q = |x: &i32| x % 2 == 0;
@@ -1720,7 +1720,7 @@ proptest! {
     // Property: De Morgan's Laws - not(p or q) == (not p) and (not q)
     #[test]
     fn test_de_morgan_or(vec in prop::collection::vec(any::<i32>(), 0..50)) {
-        use orlando::logic::{both, complement, either};
+        use orlando_transducers::logic::{both, complement, either};
 
         let p = |x: &i32| *x > 0;
         let q = |x: &i32| x % 2 == 0;
@@ -1736,7 +1736,7 @@ proptest! {
     // Property: When composed with Filter
     #[test]
     fn test_when_with_filter_equivalence(vec in prop::collection::vec(0i32..100, 0..50)) {
-        use orlando::{logic::When, to_vec};
+        use orlando_transducers::{logic::When, to_vec};
 
         // When followed by identity should equal Filter + Map
         let when_pipeline = When::new(|x: &i32| *x > 50, |x: i32| x.saturating_mul(2));
@@ -1756,7 +1756,7 @@ proptest! {
     // Property: all_pass with empty list is always true
     #[test]
     fn test_all_pass_empty_always_true(vec in prop::collection::vec(any::<i32>(), 0..20)) {
-        use orlando::logic::{all_pass, PredicateVec};
+        use orlando_transducers::logic::{all_pass, PredicateVec};
 
         let predicates: PredicateVec<i32> = vec![];
         let always_true = all_pass(predicates);
@@ -1769,7 +1769,7 @@ proptest! {
     // Property: any_pass with empty list is always false
     #[test]
     fn test_any_pass_empty_always_false(vec in prop::collection::vec(any::<i32>(), 0..20)) {
-        use orlando::logic::{any_pass, PredicateVec};
+        use orlando_transducers::logic::{any_pass, PredicateVec};
 
         let predicates: PredicateVec<i32> = vec![];
         let always_false = any_pass(predicates);

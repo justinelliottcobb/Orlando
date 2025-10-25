@@ -41,9 +41,9 @@
 //! ## Usage (Rust)
 //!
 //! ```rust
-//! use orlando::transforms::{Map, Filter, Take};
-//! use orlando::collectors::to_vec;
-//! use orlando::transducer::Transducer;
+//! use orlando_transducers::transforms::{Map, Filter, Take};
+//! use orlando_transducers::collectors::to_vec;
+//! use orlando_transducers::transducer::Transducer;
 //!
 //! // Build a pipeline
 //! let pipeline = Map::new(|x: i32| x * 2)

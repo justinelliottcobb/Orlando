@@ -5,7 +5,7 @@
 //! - Manual for loops
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use orlando::*;
+use orlando_transducers::*;
 
 fn benchmark_map_filter_take(c: &mut Criterion) {
     let mut group = c.benchmark_group("map_filter_take");
