@@ -94,7 +94,7 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Build WASM package (release)
-        run: wasm-pack build --release --target web --out-dir pkg
+        run: wasm-pack build --release --target bundler --out-dir pkg
 
       - name: Verify package contents
         run: |
