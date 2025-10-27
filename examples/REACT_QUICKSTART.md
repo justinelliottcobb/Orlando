@@ -6,6 +6,14 @@
 npm install orlando-transducers
 ```
 
+**For Vite users**, also install the WASM plugin:
+
+```bash
+npm install vite-plugin-wasm
+```
+
+See [Build Tool Compatibility](#build-tool-compatibility) for configuration.
+
 ## ⚡ Key Point: No Initialization Needed!
 
 With the bundler target, Orlando auto-initializes when your app loads. **No `init()` function required!**
@@ -250,12 +258,29 @@ const names: any[] = pipeline.toArray(data);
 
 ### ✅ Vite (Recommended)
 
-Works out of the box!
+Requires the WASM plugin:
 
 ```bash
 npm create vite@latest my-app -- --template react
 cd my-app
-npm install orlando-transducers
+npm install orlando-transducers vite-plugin-wasm
+```
+
+Add to `vite.config.js`:
+
+```javascript
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import wasm from 'vite-plugin-wasm';
+
+export default defineConfig({
+  plugins: [react(), wasm()],
+});
+```
+
+Then run:
+
+```bash
 npm run dev
 ```
 
