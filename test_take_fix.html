@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Test take() Fix</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .test { margin: 20px 0; padding: 10px; border: 1px solid #ccc; }
+        .pass { background: #d4edda; }
+        .fail { background: #f8d7da; }
+    </style>
+</head>
+<body>
+    <h1>Testing take() Fix</h1>
+    <div id="results"></div>
+
+    <script type="module">
+        import { Pipeline } from './pkg-test/orlando_transducers.js';
+
+        const results = document.getElementById('results');
+
+        function test(name, fn) {
+            try {
+                const result = fn();
+                const div = document.createElement('div');
+                div.className = 'test ' + (result.pass ? 'pass' : 'fail');
+                div.innerHTML = `
+                    <h3>${result.pass ? '✅' : '❌'} ${name}</h3>
+                    <p>Expected: ${JSON.stringify(result.expected)}</p>
+                    <p>Got: ${JSON.stringify(result.got)}</p>
+                `;
+                results.appendChild(div);
+            } catch (e) {
+                const div = document.createElement('div');
+                div.className = 'test fail';
+                div.innerHTML = `<h3>❌ ${name}</h3><p>Error: ${e.message}</p>`;
+                results.appendChild(div);
+            }
+        }
+
+        // Test 1: Original bug report
+        test('take(1) with map and filter', () => {
+            const pipeline = new Pipeline()
+                .map(x => x * 30)
+                .filter(x => x > 10)
+                .take(1);
+
+            const data = [-1, 2, 3, 4, 5, -6, 7, 8, 9, 10];
+            const got = pipeline.toArray(data);
+            const expected = [60];  // Should only get first value that passes filter
+
+            return {
+                pass: JSON.stringify(got) === JSON.stringify(expected),
+                expected,
+                got
+            };
+        });
+
+        // Test 2: take(3)
+        test('take(3) with filter', () => {
+            const pipeline = new Pipeline()
+                .filter(x => x > 0)
+                .take(3);
+
+            const data = [-1, 1, 2, -3, 3, 4, 5];
+            const got = pipeline.toArray(data);
+            const expected = [1, 2, 3];
+
+            return {
+                pass: JSON.stringify(got) === JSON.stringify(expected),
+                expected,
+                got
+            };
+        });
+
+        // Test 3: take without filter
+        test('take(5) without filter', () => {
+            const pipeline = new Pipeline()
+                .map(x => x * 2)
+                .take(5);
+
+            const data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+            const got = pipeline.toArray(data);
+            const expected = [2, 4, 6, 8, 10];
+
+            return {
+                pass: JSON.stringify(got) === JSON.stringify(expected),
+                expected,
+                got
+            };
+        });
+
+        // Test 4: drop(2)
+        test('drop(2)', () => {
+            const pipeline = new Pipeline()
+                .drop(2)
+                .take(3);
+
+            const data = [1, 2, 3, 4, 5, 6, 7];
+            const got = pipeline.toArray(data);
+            const expected = [3, 4, 5];
+
+            return {
+                pass: JSON.stringify(got) === JSON.stringify(expected),
+                expected,
+                got
+            };
+        });
+
+        // Test 5: drop with filter
+        test('drop(2) with filter', () => {
+            const pipeline = new Pipeline()
+                .filter(x => x > 0)
+                .drop(2)
+                .take(2);
+
+            const data = [-1, 1, -2, 2, 3, 4, 5];
+            const got = pipeline.toArray(data);
+            const expected = [3, 4];  // Positive values: [1, 2, 3, 4, 5] -> drop 2 -> [3, 4, 5] -> take 2 -> [3, 4]
+
+            return {
+                pass: JSON.stringify(got) === JSON.stringify(expected),
+                expected,
+                got
+            };
+        });
+    </script>
+</body>
+</html>

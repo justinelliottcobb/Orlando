@@ -286,3 +286,104 @@ fn test_wasm_pipeline_pluck_composition() {
     assert_eq!(result.get(0).as_f64(), Some(30.0));
     assert_eq!(result.get(1).as_f64(), Some(28.0));
 }
+
+// Regression tests for take() state bug
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_take_with_filter() {
+    use js_sys::{Array, Function};
+    use orlando_transducers::Pipeline;
+
+    // This is the exact bug reported by the user
+    let pipeline = Pipeline::new();
+    let map_fn = Function::new_with_args("x", "return x * 30");
+    let filter_fn = Function::new_with_args("x", "return x > 10");
+    let pipeline = pipeline.map(&map_fn).filter(&filter_fn).take(1);
+
+    let source = Array::new();
+    source.push(&(-1).into());
+    source.push(&2.into());
+    source.push(&3.into());
+    source.push(&4.into());
+    source.push(&5.into());
+    source.push(&(-6).into());
+    source.push(&7.into());
+    source.push(&8.into());
+    source.push(&9.into());
+    source.push(&10.into());
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 1, "take(1) should only return 1 element");
+    assert_eq!(result.get(0).as_f64(), Some(60.0));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_take_multiple_with_filter() {
+    use js_sys::{Array, Function};
+    use orlando_transducers::Pipeline;
+
+    let pipeline = Pipeline::new();
+    let filter_fn = Function::new_with_args("x", "return x > 0");
+    let pipeline = pipeline.filter(&filter_fn).take(3);
+
+    let source = Array::new();
+    source.push(&(-1).into());
+    source.push(&1.into());
+    source.push(&2.into());
+    source.push(&(-3).into());
+    source.push(&3.into());
+    source.push(&4.into());
+    source.push(&5.into());
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 3);
+    assert_eq!(result.get(0).as_f64(), Some(1.0));
+    assert_eq!(result.get(1).as_f64(), Some(2.0));
+    assert_eq!(result.get(2).as_f64(), Some(3.0));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_drop_with_filter() {
+    use js_sys::{Array, Function};
+    use orlando_transducers::Pipeline;
+
+    let pipeline = Pipeline::new();
+    let filter_fn = Function::new_with_args("x", "return x > 0");
+    let pipeline = pipeline.filter(&filter_fn).drop(2).take(2);
+
+    let source = Array::new();
+    source.push(&(-1).into());
+    source.push(&1.into());
+    source.push(&(-2).into());
+    source.push(&2.into());
+    source.push(&3.into());
+    source.push(&4.into());
+    source.push(&5.into());
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 2);
+    assert_eq!(result.get(0).as_f64(), Some(3.0));
+    assert_eq!(result.get(1).as_f64(), Some(4.0));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_take_without_filter() {
+    use js_sys::{Array, Function};
+    use orlando_transducers::Pipeline;
+
+    let pipeline = Pipeline::new();
+    let map_fn = Function::new_with_args("x", "return x * 2");
+    let pipeline = pipeline.map(&map_fn).take(5);
+
+    let source = Array::new();
+    for i in 1..=10 {
+        source.push(&i.into());
+    }
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 5);
+    assert_eq!(result.get(0).as_f64(), Some(2.0));
+    assert_eq!(result.get(1).as_f64(), Some(4.0));
+    assert_eq!(result.get(2).as_f64(), Some(6.0));
+    assert_eq!(result.get(3).as_f64(), Some(8.0));
+    assert_eq!(result.get(4).as_f64(), Some(10.0));
+}

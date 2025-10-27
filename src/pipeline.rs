@@ -259,6 +259,7 @@ impl Pipeline {
     pub fn to_array(&self, source: &Array) -> Array {
         let result = Array::new();
         let mut should_stop = false;
+        let mut state = ProcessState::new();
 
         for i in 0..source.length() {
             if should_stop {
@@ -266,7 +267,7 @@ impl Pipeline {
             }
 
             let val = source.get(i);
-            let results = self.process_value(val);
+            let results = self.process_value_with_state(val, &mut state);
 
             for res in results {
                 match res {
@@ -301,6 +302,7 @@ impl Pipeline {
     pub fn reduce(&self, source: &Array, reducer: &Function, initial: JsValue) -> JsValue {
         let mut acc = initial;
         let mut should_stop = false;
+        let mut state = ProcessState::new();
 
         for i in 0..source.length() {
             if should_stop {
@@ -308,7 +310,7 @@ impl Pipeline {
             }
 
             let val = source.get(i);
-            let results = self.process_value(val);
+            let results = self.process_value_with_state(val, &mut state);
 
             for res in results {
                 match res {
@@ -343,8 +345,12 @@ impl Pipeline {
     }
 
     // Internal helper to process a single value through the pipeline
-    fn process_value(&self, val: JsValue) -> Vec<ProcessResult> {
-        self.process_value_from(val, 0, &mut ProcessState::new())
+    fn process_value_with_state(
+        &self,
+        val: JsValue,
+        state: &mut ProcessState,
+    ) -> Vec<ProcessResult> {
+        self.process_value_from(val, 0, state)
     }
 
     // Process a value starting from a specific operation index
