@@ -387,3 +387,144 @@ fn test_wasm_pipeline_take_without_filter() {
     assert_eq!(result.get(3).as_f64(), Some(8.0));
     assert_eq!(result.get(4).as_f64(), Some(10.0));
 }
+
+// Comprehensive integration tests for stateful operations
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_takewhile_with_map() {
+    use js_sys::{Array, Function};
+    use orlando_transducers::Pipeline;
+
+    let pipeline = Pipeline::new();
+    let map_fn = Function::new_with_args("x", "return x * 2");
+    let pred_fn = Function::new_with_args("x", "return x < 20");
+    let pipeline = pipeline.map(&map_fn).takeWhile(&pred_fn);
+
+    let source = Array::new();
+    for i in 1..=20 {
+        source.push(&i.into());
+    }
+
+    let result = pipeline.to_array(&source);
+    // Should take while x*2 < 20, so x < 10, meaning [2, 4, 6, 8, 10, 12, 14, 16, 18]
+    assert_eq!(result.length(), 9);
+    assert_eq!(result.get(0).as_f64(), Some(2.0));
+    assert_eq!(result.get(8).as_f64(), Some(18.0));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_dropwhile_with_filter() {
+    use js_sys::{Array, Function};
+    use orlando_transducers::Pipeline;
+
+    let pipeline = Pipeline::new();
+    let filter_fn = Function::new_with_args("x", "return x % 2 === 0");
+    let pred_fn = Function::new_with_args("x", "return x < 10");
+    let pipeline = pipeline.filter(&filter_fn).dropWhile(&pred_fn).take(3);
+
+    let source = Array::new();
+    for i in 1..=20 {
+        source.push(&i.into());
+    }
+
+    let result = pipeline.to_array(&source);
+    // Even numbers: [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
+    // Drop while < 10: [10, 12, 14, 16, 18, 20]
+    // Take 3: [10, 12, 14]
+    assert_eq!(result.length(), 3);
+    assert_eq!(result.get(0).as_f64(), Some(10.0));
+    assert_eq!(result.get(1).as_f64(), Some(12.0));
+    assert_eq!(result.get(2).as_f64(), Some(14.0));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_complex_stateful_combination() {
+    use js_sys::{Array, Function};
+    use orlando_transducers::Pipeline;
+
+    let pipeline = Pipeline::new();
+    let map_fn = Function::new_with_args("x", "return x + 1");
+    let filter_fn = Function::new_with_args("x", "return x % 2 === 0");
+    let pipeline = pipeline
+        .map(&map_fn) // [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        .filter(&filter_fn) // [2, 4, 6, 8, 10]
+        .drop(1) // [4, 6, 8, 10]
+        .take(2); // [4, 6]
+
+    let source = Array::new();
+    for i in 1..=10 {
+        source.push(&i.into());
+    }
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 2);
+    assert_eq!(result.get(0).as_f64(), Some(4.0));
+    assert_eq!(result.get(1).as_f64(), Some(6.0));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_flatmap_with_take() {
+    use js_sys::{Array, Function};
+    use orlando_transducers::Pipeline;
+
+    let pipeline = Pipeline::new();
+    let flatmap_fn = Function::new_with_args("x", "return [x, x + 1]");
+    let pipeline = pipeline.flatMap(&flatmap_fn).take(5);
+
+    let source = Array::new();
+    for i in 1..=10 {
+        source.push(&i.into());
+    }
+
+    let result = pipeline.to_array(&source);
+    // flatMap produces: [1, 2, 2, 3, 3, 4, ...]
+    // take(5): [1, 2, 2, 3, 3]
+    assert_eq!(result.length(), 5);
+    assert_eq!(result.get(0).as_f64(), Some(1.0));
+    assert_eq!(result.get(1).as_f64(), Some(2.0));
+    assert_eq!(result.get(2).as_f64(), Some(2.0));
+    assert_eq!(result.get(3).as_f64(), Some(3.0));
+    assert_eq!(result.get(4).as_f64(), Some(3.0));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_multiple_takes() {
+    use js_sys::{Array, Function};
+    use orlando_transducers::Pipeline;
+
+    // This tests that take operations compose correctly
+    let pipeline = Pipeline::new();
+    let pipeline = pipeline.take(10).take(5);
+
+    let source = Array::new();
+    for i in 1..=20 {
+        source.push(&i.into());
+    }
+
+    let result = pipeline.to_array(&source);
+    // The inner take(10) limits to first 10, then take(5) limits to first 5
+    assert_eq!(result.length(), 5);
+    assert_eq!(result.get(0).as_f64(), Some(1.0));
+    assert_eq!(result.get(4).as_f64(), Some(5.0));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_reduce_with_stateful_ops() {
+    use js_sys::{Array, Function};
+    use orlando_transducers::Pipeline;
+    use wasm_bindgen::JsValue;
+
+    let pipeline = Pipeline::new();
+    let filter_fn = Function::new_with_args("x", "return x % 2 === 0");
+    let pipeline = pipeline.filter(&filter_fn).take(3);
+
+    let source = Array::new();
+    for i in 1..=20 {
+        source.push(&i.into());
+    }
+
+    let reducer = Function::new_with_args("acc, val", "return acc + val");
+    let result = pipeline.reduce(&source, &reducer, JsValue::from(0));
+
+    // Even numbers [2, 4, 6], sum = 12
+    assert_eq!(result.as_f64(), Some(12.0));
+}
