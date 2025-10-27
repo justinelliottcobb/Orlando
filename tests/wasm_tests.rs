@@ -397,7 +397,7 @@ fn test_wasm_pipeline_takewhile_with_map() {
     let pipeline = Pipeline::new();
     let map_fn = Function::new_with_args("x", "return x * 2");
     let pred_fn = Function::new_with_args("x", "return x < 20");
-    let pipeline = pipeline.map(&map_fn).takeWhile(&pred_fn);
+    let pipeline = pipeline.map(&map_fn).take_while(&pred_fn);
 
     let source = Array::new();
     for i in 1..=20 {
@@ -419,7 +419,7 @@ fn test_wasm_pipeline_dropwhile_with_filter() {
     let pipeline = Pipeline::new();
     let filter_fn = Function::new_with_args("x", "return x % 2 === 0");
     let pred_fn = Function::new_with_args("x", "return x < 10");
-    let pipeline = pipeline.filter(&filter_fn).dropWhile(&pred_fn).take(3);
+    let pipeline = pipeline.filter(&filter_fn).drop_while(&pred_fn).take(3);
 
     let source = Array::new();
     for i in 1..=20 {
@@ -468,7 +468,7 @@ fn test_wasm_pipeline_flatmap_with_take() {
 
     let pipeline = Pipeline::new();
     let flatmap_fn = Function::new_with_args("x", "return [x, x + 1]");
-    let pipeline = pipeline.flatMap(&flatmap_fn).take(5);
+    let pipeline = pipeline.flat_map(&flatmap_fn).take(5);
 
     let source = Array::new();
     for i in 1..=10 {
