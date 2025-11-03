@@ -1282,6 +1282,611 @@ const result2 = zipLongest(a, b, undefined);
 
 ---
 
+## Statistical Operations
+
+Orlando provides efficient statistical analysis operations for numeric data.
+
+### `product(array)`
+
+Multiplies all numbers in an array.
+
+```typescript
+product(array: Array<number>): number
+```
+
+**Example:**
+```javascript
+import { product } from 'orlando-transducers';
+
+const numbers = [2, 3, 4];
+const result = product(numbers);
+// result: 24
+
+const pipeline = new Pipeline().filter(x => x > 0);
+const filtered = pipeline.toArray([1, -2, 3, 4]);
+const prod = product(filtered);
+// prod: 12
+```
+
+**Use cases:**
+- Mathematical calculations
+- Compound growth rates
+- Probability calculations
+
+---
+
+### `mean(array)`
+
+Calculates the arithmetic mean (average) of an array.
+
+```typescript
+mean(array: Array<number>): number | undefined
+```
+
+**Example:**
+```javascript
+import { mean } from 'orlando-transducers';
+
+const scores = [85, 92, 78, 95, 88];
+const average = mean(scores);
+// average: 87.6
+
+// Returns undefined for empty arrays
+mean([]); // undefined
+```
+
+**Use cases:**
+- Performance metrics
+- Grade calculations
+- Statistical analysis
+
+---
+
+### `median(array)`
+
+Finds the median (middle value) of an array.
+
+```typescript
+median(array: Array<number>): number | undefined
+```
+
+**Example:**
+```javascript
+import { median } from 'orlando-transducers';
+
+const odd = [1, 3, 5, 7, 9];
+median(odd); // 5
+
+const even = [1, 2, 3, 4];
+median(even); // 2.5
+
+median([]); // undefined
+```
+
+**Use cases:**
+- Robust averaging (less affected by outliers)
+- Salary distributions
+- Performance baselines
+
+---
+
+### `variance(array)`
+
+Calculates the sample variance.
+
+```typescript
+variance(array: Array<number>): number | undefined
+```
+
+**Example:**
+```javascript
+import { variance } from 'orlando-transducers';
+
+const data = [2, 4, 6, 8, 10];
+const v = variance(data);
+// v: 10.0
+
+variance([5]); // undefined (need at least 2 values)
+```
+
+**Use cases:**
+- Measuring data spread
+- Quality control
+- Risk assessment
+
+---
+
+### `stdDev(array)`
+
+Calculates the standard deviation (square root of variance).
+
+```typescript
+stdDev(array: Array<number>): number | undefined
+```
+
+**Example:**
+```javascript
+import { stdDev } from 'orlando-transducers';
+
+const data = [2, 4, 6, 8, 10];
+const sd = stdDev(data);
+// sd: 3.16...
+
+// Useful for measuring consistency
+const player1Scores = [50, 52, 48, 51, 49];
+const player2Scores = [30, 70, 20, 80, 10];
+stdDev(player1Scores); // ~1.58 (consistent)
+stdDev(player2Scores); // ~27.39 (variable)
+```
+
+**Use cases:**
+- Data consistency measurement
+- Outlier detection
+- Statistical analysis
+
+---
+
+### `min(array)` / `max(array)`
+
+Finds the minimum or maximum value.
+
+```typescript
+min(array: Array<number>): number | undefined
+max(array: Array<number>): number | undefined
+```
+
+**Example:**
+```javascript
+import { min, max } from 'orlando-transducers';
+
+const scores = [85, 92, 78, 95, 88];
+min(scores); // 78
+max(scores); // 95
+
+min([]); // undefined
+```
+
+---
+
+### `minBy(array, keyFn)` / `maxBy(array, keyFn)`
+
+Finds the element with minimum or maximum key value.
+
+```typescript
+minBy<T>(array: Array<T>, keyFn: (value: T) => number): T | undefined
+maxBy<T>(array: Array<T>, keyFn: (value: T) => number): T | undefined
+```
+
+**Example:**
+```javascript
+import { minBy, maxBy } from 'orlando-transducers';
+
+const users = [
+  { name: 'Alice', score: 85 },
+  { name: 'Bob', score: 92 },
+  { name: 'Charlie', score: 78 }
+];
+
+const lowest = minBy(users, u => u.score);
+// lowest: { name: 'Charlie', score: 78 }
+
+const highest = maxBy(users, u => u.score);
+// highest: { name: 'Bob', score: 92 }
+```
+
+**Use cases:**
+- Finding extremes in object arrays
+- Best/worst performer
+- Price comparisons
+
+---
+
+### `quantile(array, p)`
+
+Calculates the p-th quantile (0 ≤ p ≤ 1) using linear interpolation.
+
+```typescript
+quantile(array: Array<number>, p: number): number | undefined
+```
+
+**Example:**
+```javascript
+import { quantile } from 'orlando-transducers';
+
+const data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+quantile(data, 0.25); // First quartile (Q1): 3.25
+quantile(data, 0.5);  // Median (Q2): 5.5
+quantile(data, 0.75); // Third quartile (Q3): 7.75
+quantile(data, 0.95); // 95th percentile: 9.55
+
+quantile(data, 1.5); // undefined (p out of range)
+```
+
+**Use cases:**
+- Percentile calculations
+- Performance SLAs (p95, p99)
+- Outlier detection
+
+---
+
+### `mode(array)`
+
+Finds the most frequently occurring value.
+
+```typescript
+mode(array: Array<number>): number | undefined
+```
+
+**Example:**
+```javascript
+import { mode } from 'orlando-transducers';
+
+const data = [1, 2, 2, 3, 3, 3, 4];
+mode(data); // 3 (appears most often)
+
+const tie = [1, 1, 2, 2];
+mode(tie); // 1 (returns first mode if tied)
+
+mode([]); // undefined
+```
+
+**Use cases:**
+- Finding common values
+- Survey analysis
+- Pattern detection
+
+---
+
+## Collection Utilities
+
+Non-streaming utility operations for sorting, reversing, and generating sequences.
+
+### `sortBy(array, keyFn)`
+
+Sorts elements by the result of a key function.
+
+```typescript
+sortBy<T, K>(array: Array<T>, keyFn: (value: T) => K): Array<T>
+```
+
+**Example:**
+```javascript
+import { sortBy } from 'orlando-transducers';
+
+const users = [
+  { name: 'Charlie', age: 30 },
+  { name: 'Alice', age: 25 },
+  { name: 'Bob', age: 35 }
+];
+
+const byAge = sortBy(users, u => u.age);
+// [{ name: 'Alice', age: 25 }, { name: 'Charlie', age: 30 }, { name: 'Bob', age: 35 }]
+
+const byName = sortBy(users, u => u.name);
+// [{ name: 'Alice', ... }, { name: 'Bob', ... }, { name: 'Charlie', ... }]
+```
+
+**Use cases:**
+- Sorting objects by property
+- Custom ordering
+- Normalized sorting
+
+---
+
+### `sortWith(array, compareFn)`
+
+Sorts with a custom comparator function.
+
+```typescript
+sortWith<T>(array: Array<T>, compareFn: (a: T, b: T) => number): Array<T>
+```
+
+**Example:**
+```javascript
+import { sortWith } from 'orlando-transducers';
+
+const numbers = [3, 1, 4, 1, 5];
+
+// Ascending
+const asc = sortWith(numbers, (a, b) => a - b);
+// [1, 1, 3, 4, 5]
+
+// Descending
+const desc = sortWith(numbers, (a, b) => b - a);
+// [5, 4, 3, 1, 1]
+
+// Complex comparison
+const items = [
+  { priority: 1, name: 'b' },
+  { priority: 2, name: 'a' },
+  { priority: 1, name: 'a' }
+];
+const sorted = sortWith(items, (a, b) => {
+  if (a.priority !== b.priority) return a.priority - b.priority;
+  return a.name.localeCompare(b.name);
+});
+```
+
+**Use cases:**
+- Multi-level sorting
+- Custom ordering logic
+- Complex comparisons
+
+---
+
+### `reverse(array)`
+
+Reverses the order of elements.
+
+```typescript
+reverse<T>(array: Array<T>): Array<T>
+```
+
+**Example:**
+```javascript
+import { reverse } from 'orlando-transducers';
+
+const data = [1, 2, 3, 4, 5];
+const reversed = reverse(data);
+// reversed: [5, 4, 3, 2, 1]
+
+// With pipeline
+const pipeline = new Pipeline().filter(x => x % 2 === 0);
+const evens = pipeline.toArray([1, 2, 3, 4, 5, 6]);
+const reversedEvens = reverse(evens);
+// reversedEvens: [6, 4, 2]
+```
+
+**Use cases:**
+- Reversing order
+- Last-to-first processing
+- Stack operations
+
+---
+
+### `range(start, end, step)`
+
+Generates a numeric sequence from start to end (exclusive) with a given step.
+
+```typescript
+range(start: number, end: number, step: number): Array<number>
+```
+
+**Example:**
+```javascript
+import { range } from 'orlando-transducers';
+
+range(0, 10, 1);    // [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+range(0, 10, 2);    // [0, 2, 4, 6, 8]
+range(10, 0, -1);   // [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
+range(0, 1, 0.1);   // [0, 0.1, 0.2, ..., 0.9]
+
+// Use with pipeline
+const pipeline = new Pipeline().filter(x => x % 3 === 0);
+const divisibleBy3 = pipeline.toArray(range(0, 30, 1));
+// [0, 3, 6, 9, 12, 15, 18, 21, 24, 27]
+```
+
+**Use cases:**
+- Generating sequences
+- Loop replacements
+- Index generation
+
+---
+
+### `repeat(value, n)`
+
+Repeats a value N times.
+
+```typescript
+repeat<T>(value: T, n: number): Array<T>
+```
+
+**Example:**
+```javascript
+import { repeat } from 'orlando-transducers';
+
+repeat(0, 5);           // [0, 0, 0, 0, 0]
+repeat('x', 3);         // ['x', 'x', 'x']
+repeat([1, 2], 2);      // [[1, 2], [1, 2]]
+
+// Initialize array with default values
+const defaultScores = repeat(0, 10);
+```
+
+**Use cases:**
+- Array initialization
+- Padding
+- Default values
+
+---
+
+### `cycle(array, n)`
+
+Repeats an entire array N times.
+
+```typescript
+cycle<T>(array: Array<T>, n: number): Array<T>
+```
+
+**Example:**
+```javascript
+import { cycle } from 'orlando-transducers';
+
+cycle([1, 2, 3], 2);         // [1, 2, 3, 1, 2, 3]
+cycle(['a', 'b'], 3);        // ['a', 'b', 'a', 'b', 'a', 'b']
+
+// Create repeating pattern
+const colors = cycle(['red', 'blue', 'green'], 10);
+// ['red', 'blue', 'green', 'red', 'blue', 'green', ...]
+```
+
+**Use cases:**
+- Repeating patterns
+- Round-robin scheduling
+- Cyclic data
+
+---
+
+### `unfold(seed, fn, limit)`
+
+Generates a sequence by repeatedly applying a function to a seed value.
+
+```typescript
+unfold<T>(seed: T, fn: (value: T) => T | undefined, limit: number): Array<T>
+```
+
+**Example:**
+```javascript
+import { unfold } from 'orlando-transducers';
+
+// Fibonacci sequence
+const fib = unfold(
+  [0, 1],
+  ([a, b]) => [b, a + b],
+  10
+);
+// [[0, 1], [1, 1], [1, 2], [2, 3], [3, 5], [5, 8], ...]
+
+// Powers of 2
+const powersOf2 = unfold(1, x => x * 2, 8);
+// [2, 4, 8, 16, 32, 64, 128, 256]
+
+// Stops when function returns undefined
+const countdown = unfold(5, x => x > 0 ? x - 1 : undefined, 10);
+// [4, 3, 2, 1, 0]
+```
+
+**Use cases:**
+- Generating sequences
+- Recursive patterns
+- Mathematical series
+
+---
+
+## Path Operations (JavaScript-Specific)
+
+Safe navigation and transformation of nested objects.
+
+### `path(obj, pathArray)`
+
+Safely accesses nested properties using a path array.
+
+```typescript
+path(obj: Object, pathArray: Array<string>): any
+```
+
+**Example:**
+```javascript
+import { path } from 'orlando-transducers';
+
+const user = {
+  profile: {
+    contact: {
+      email: 'user@example.com'
+    }
+  }
+};
+
+path(user, ['profile', 'contact', 'email']);
+// 'user@example.com'
+
+path(user, ['profile', 'contact', 'phone']);
+// undefined (safe - doesn't throw)
+
+path(user, ['nonexistent', 'path']);
+// undefined
+```
+
+**Use cases:**
+- Safe property access
+- Deep object navigation
+- Optional chaining alternative
+
+---
+
+### `pathOr(obj, pathArray, defaultValue)`
+
+Like `path`, but returns a default value if the path doesn't exist.
+
+```typescript
+pathOr(obj: Object, pathArray: Array<string>, defaultValue: any): any
+```
+
+**Example:**
+```javascript
+import { pathOr } from 'orlando-transducers';
+
+const config = {
+  server: {
+    port: 3000
+  }
+};
+
+pathOr(config, ['server', 'port'], 8080);
+// 3000
+
+pathOr(config, ['server', 'host'], 'localhost');
+// 'localhost' (default)
+
+pathOr(config, ['database', 'url'], 'mongodb://localhost');
+// 'mongodb://localhost' (default)
+```
+
+**Use cases:**
+- Configuration with defaults
+- Fallback values
+- Safe data access
+
+---
+
+### `evolve(obj, transformations)`
+
+Applies transformations to nested object properties immutably.
+
+```typescript
+evolve(obj: Object, transformations: Object): Object
+```
+
+**Example:**
+```javascript
+import { evolve } from 'orlando-transducers';
+
+const user = {
+  name: 'john',
+  age: 30,
+  contact: {
+    email: 'JOHN@EXAMPLE.COM'
+  }
+};
+
+const normalized = evolve(user, {
+  name: (s) => s.toUpperCase(),
+  age: (n) => n + 1,
+  contact: {
+    email: (s) => s.toLowerCase()
+  }
+});
+
+// normalized: {
+//   name: 'JOHN',
+//   age: 31,
+//   contact: { email: 'john@example.com' }
+// }
+
+// Original is unchanged (immutable)
+console.log(user.name); // 'john'
+```
+
+**Use cases:**
+- Data normalization
+- Immutable updates
+- Nested transformations
+- API response formatting
+
+---
+
 ## Logic Functions
 
 Orlando provides predicate combinators and conditional transducers for cleaner, more declarative conditional logic in pipelines.

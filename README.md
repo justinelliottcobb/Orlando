@@ -163,6 +163,35 @@ These execute the pipeline and return a result:
 | `frequencies(source)` | Count occurrences of each element | `frequencies(data)` |
 | `topK(source, k)` | Get k largest elements | `topK(scores, 10)` |
 
+### Statistical Operations
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `product(array)` | Multiply all numbers | `product([2, 3, 4])` → 24 |
+| `mean(array)` | Arithmetic mean (average) | `mean([1, 2, 3, 4, 5])` → 3 |
+| `median(array)` | Middle value | `median([1, 2, 3, 4, 5])` → 3 |
+| `min(array)` / `max(array)` | Minimum/maximum value | `max([1, 5, 3])` → 5 |
+| `minBy(array, keyFn)` / `maxBy(array, keyFn)` | Min/max by key function | `maxBy(users, u => u.score)` |
+| `variance(array)` | Sample variance | `variance([2, 4, 6, 8])` |
+| `stdDev(array)` | Standard deviation | `stdDev([2, 4, 6, 8])` |
+| `quantile(array, p)` | P-th quantile (0-1) | `quantile(data, 0.95)` |
+| `mode(array)` | Most frequent value | `mode([1, 2, 2, 3])` → 2 |
+
+### Collection Utilities
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `sortBy(array, keyFn)` | Sort by key function | `sortBy(users, u => u.age)` |
+| `sortWith(array, cmpFn)` | Sort with comparator | `sortWith(nums, (a,b) => a - b)` |
+| `reverse(array)` | Reverse order | `reverse([1, 2, 3])` → [3, 2, 1] |
+| `range(start, end, step)` | Generate numeric sequence | `range(0, 10, 2)` → [0, 2, 4, 6, 8] |
+| `repeat(value, n)` | Repeat value N times | `repeat('x', 3)` → ['x', 'x', 'x'] |
+| `cycle(array, n)` | Repeat array N times | `cycle([1, 2], 3)` → [1, 2, 1, 2, 1, 2] |
+| `unfold(seed, fn, limit)` | Generate from seed | `unfold(1, x => x * 2, 5)` → [2, 4, 8, 16, 32] |
+| `path(obj, pathArray)` | Safe deep property access | `path(user, ['profile', 'email'])` |
+| `pathOr(obj, path, default)` | Path with default value | `pathOr(config, ['port'], 8080)` |
+| `evolve(obj, transforms)` | Nested transformations | `evolve(user, { age: n => n + 1 })` |
+
 ### Logic Functions
 
 Predicate combinators and conditional transformations for cleaner conditional logic:

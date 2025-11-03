@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orlando - Statistical Operations Demo</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .demo-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .demo-section h2 {
+            color: #4CAF50;
+            margin-top: 0;
+        }
+        .code-block {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        .result {
+            background: #e8f5e9;
+            padding: 15px;
+            border-radius: 4px;
+            border-left: 4px solid #4CAF50;
+            margin: 10px 0;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .data-input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #f4f4f4;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Statistical Operations Demo</h1>
+    <p>Explore Orlando's powerful statistical analysis functions for data-driven insights.</p>
+
+    <div class="demo-section">
+        <h2>Basic Statistics</h2>
+        <p>Calculate common statistical measures from numeric data.</p>
+
+        <label for="stats-data">Enter numbers (comma-separated):</label>
+        <input type="text" id="stats-data" class="data-input" value="85, 92, 78, 95, 88, 72, 99, 81, 87, 93">
+
+        <button onclick="runBasicStats()">Calculate Statistics</button>
+
+        <div id="stats-output"></div>
+    </div>
+
+    <div class="demo-section">
+        <h2>Quantile Analysis</h2>
+        <p>Analyze data distribution with quartiles and percentiles.</p>
+
+        <label for="quantile-data">Dataset:</label>
+        <input type="text" id="quantile-data" class="data-input" value="10, 20, 30, 40, 50, 60, 70, 80, 90, 100">
+
+        <button onclick="runQuantileAnalysis()">Analyze Quantiles</button>
+
+        <div id="quantile-output"></div>
+    </div>
+
+    <div class="demo-section">
+        <h2>Performance Comparison</h2>
+        <p>Compare performance metrics across different players/systems.</p>
+
+        <button onclick="runPerformanceComparison()">Run Comparison</button>
+
+        <div id="performance-output"></div>
+    </div>
+
+    <div class="demo-section">
+        <h2>Find Extremes (minBy/maxBy)</h2>
+        <p>Find minimum and maximum values in complex objects.</p>
+
+        <button onclick="runExtremesDemo()">Find Best & Worst Performers</button>
+
+        <div id="extremes-output"></div>
+    </div>
+
+    <script type="module">
+        import init, * as orlando from '../pkg/orlando.js';
+
+        await init();
+
+        // Make orlando available globally
+        window.orlando = orlando;
+        window.orlandoReady = true;
+
+        console.log('Orlando WASM module loaded successfully');
+    </script>
+
+    <script>
+        function waitForOrlando(callback) {
+            if (window.orlandoReady) {
+                callback();
+            } else {
+                setTimeout(() => waitForOrlando(callback), 100);
+            }
+        }
+
+        function parseNumbers(str) {
+            return str.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+        }
+
+        function runBasicStats() {
+            waitForOrlando(() => {
+                const data = parseNumbers(document.getElementById('stats-data').value);
+
+                const mean = orlando.mean(data);
+                const median = orlando.median(data);
+                const min = orlando.min(data);
+                const max = orlando.max(data);
+                const variance = orlando.variance(data);
+                const stdDev = orlando.stdDev(data);
+                const mode = orlando.mode(data);
+                const product = orlando.product(data.slice(0, 5)); // First 5 to avoid overflow
+
+                const output = `
+                    <div class="result">
+                        <h3>Statistical Analysis</h3>
+                        <table>
+                            <tr><th>Metric</th><th>Value</th></tr>
+                            <tr><td>Count</td><td>${data.length}</td></tr>
+                            <tr><td>Mean (Average)</td><td>${mean !== undefined ? mean.toFixed(2) : 'N/A'}</td></tr>
+                            <tr><td>Median</td><td>${median !== undefined ? median.toFixed(2) : 'N/A'}</td></tr>
+                            <tr><td>Min</td><td>${min}</td></tr>
+                            <tr><td>Max</td><td>${max}</td></tr>
+                            <tr><td>Range</td><td>${max - min}</td></tr>
+                            <tr><td>Variance</td><td>${variance !== undefined ? variance.toFixed(2) : 'N/A'}</td></tr>
+                            <tr><td>Standard Deviation</td><td>${stdDev !== undefined ? stdDev.toFixed(2) : 'N/A'}</td></tr>
+                            <tr><td>Mode</td><td>${mode !== undefined ? mode : 'N/A'}</td></tr>
+                            <tr><td>Product (first 5)</td><td>${product !== undefined ? product.toExponential(2) : 'N/A'}</td></tr>
+                        </table>
+
+                        <h4>Interpretation:</h4>
+                        <p>The data has a mean of ${mean.toFixed(2)} with a standard deviation of ${stdDev.toFixed(2)}.
+                        This indicates ${stdDev < 10 ? 'low' : 'high'} variability in the dataset.</p>
+                    </div>
+                `;
+
+                document.getElementById('stats-output').innerHTML = output;
+            });
+        }
+
+        function runQuantileAnalysis() {
+            waitForOrlando(() => {
+                const data = parseNumbers(document.getElementById('quantile-data').value);
+
+                const q25 = orlando.quantile(data, 0.25);
+                const q50 = orlando.quantile(data, 0.50);
+                const q75 = orlando.quantile(data, 0.75);
+                const p95 = orlando.quantile(data, 0.95);
+                const p99 = orlando.quantile(data, 0.99);
+
+                const output = `
+                    <div class="result">
+                        <h3>Quantile Distribution</h3>
+                        <table>
+                            <tr><th>Percentile</th><th>Value</th><th>Description</th></tr>
+                            <tr><td>25th (Q1)</td><td>${q25 !== undefined ? q25.toFixed(2) : 'N/A'}</td><td>First quartile - 25% of data below</td></tr>
+                            <tr><td>50th (Q2/Median)</td><td>${q50 !== undefined ? q50.toFixed(2) : 'N/A'}</td><td>Second quartile - middle value</td></tr>
+                            <tr><td>75th (Q3)</td><td>${q75 !== undefined ? q75.toFixed(2) : 'N/A'}</td><td>Third quartile - 75% of data below</td></tr>
+                            <tr><td>95th (P95)</td><td>${p95 !== undefined ? p95.toFixed(2) : 'N/A'}</td><td>95% of data below (common SLA)</td></tr>
+                            <tr><td>99th (P99)</td><td>${p99 !== undefined ? p99.toFixed(2) : 'N/A'}</td><td>99% of data below (outlier threshold)</td></tr>
+                        </table>
+
+                        <h4>Use in Performance Monitoring:</h4>
+                        <p>P95: ${p95.toFixed(2)} - 95% of requests complete under this value</p>
+                        <p>P99: ${p99.toFixed(2)} - Useful for catching outliers and worst-case scenarios</p>
+                    </div>
+                `;
+
+                document.getElementById('quantile-output').innerHTML = output;
+            });
+        }
+
+        function runPerformanceComparison() {
+            waitForOrlando(() => {
+                const player1 = [85, 87, 84, 86, 85, 88, 84, 86];
+                const player2 = [95, 72, 88, 65, 98, 70, 92, 68];
+                const player3 = [78, 80, 82, 79, 81, 83, 77, 80];
+
+                const compare = (data, name) => ({
+                    name,
+                    mean: orlando.mean(data),
+                    median: orlando.median(data),
+                    stdDev: orlando.stdDev(data),
+                    min: orlando.min(data),
+                    max: orlando.max(data)
+                });
+
+                const results = [
+                    compare(player1, 'Player 1 (Consistent)'),
+                    compare(player2, 'Player 2 (Variable)'),
+                    compare(player3, 'Player 3 (Average)')
+                ];
+
+                const output = `
+                    <div class="result">
+                        <h3>Player Performance Comparison</h3>
+                        <table>
+                            <tr>
+                                <th>Player</th>
+                                <th>Mean</th>
+                                <th>Median</th>
+                                <th>Std Dev</th>
+                                <th>Range</th>
+                                <th>Consistency</th>
+                            </tr>
+                            ${results.map(r => `
+                                <tr>
+                                    <td>${r.name}</td>
+                                    <td>${r.mean.toFixed(2)}</td>
+                                    <td>${r.median.toFixed(2)}</td>
+                                    <td>${r.stdDev.toFixed(2)}</td>
+                                    <td>${r.min} - ${r.max}</td>
+                                    <td>${r.stdDev < 5 ? 'High ✓' : r.stdDev < 10 ? 'Medium' : 'Low'}</td>
+                                </tr>
+                            `).join('')}
+                        </table>
+
+                        <h4>Analysis:</h4>
+                        <p><strong>Player 1</strong> shows high consistency (low std dev: ${results[0].stdDev.toFixed(2)}), making them reliable.</p>
+                        <p><strong>Player 2</strong> has high variability (std dev: ${results[1].stdDev.toFixed(2)}), with unpredictable performance.</p>
+                        <p><strong>Player 3</strong> demonstrates moderate, steady performance.</p>
+                    </div>
+                `;
+
+                document.getElementById('performance-output').innerHTML = output;
+            });
+        }
+
+        function runExtremesDemo() {
+            waitForOrlando(() => {
+                const employees = [
+                    { name: 'Alice', sales: 125000, satisfaction: 4.8 },
+                    { name: 'Bob', sales: 98000, satisfaction: 4.2 },
+                    { name: 'Charlie', sales: 152000, satisfaction: 4.9 },
+                    { name: 'Diana', sales: 87000, satisfaction: 4.5 },
+                    { name: 'Eve', sales: 143000, satisfaction: 4.7 }
+                ];
+
+                // Extract sales data
+                const sales = employees.map(e => e.sales);
+                const topSales = orlando.maxBy(employees, e => e.sales);
+                const bottomSales = orlando.minBy(employees, e => e.sales);
+                const topSatisfaction = orlando.maxBy(employees, e => e.satisfaction);
+
+                const meanSales = orlando.mean(sales);
+                const medianSales = orlando.median(sales);
+
+                const output = `
+                    <div class="result">
+                        <h3>Employee Performance Analysis</h3>
+
+                        <h4>Top Performers:</h4>
+                        <p><strong>Highest Sales:</strong> ${topSales.name} - $${topSales.sales.toLocaleString()}</p>
+                        <p><strong>Highest Satisfaction:</strong> ${topSatisfaction.name} - ${topSatisfaction.satisfaction}/5.0</p>
+
+                        <h4>Needs Attention:</h4>
+                        <p><strong>Lowest Sales:</strong> ${bottomSales.name} - $${bottomSales.sales.toLocaleString()}</p>
+
+                        <h4>Team Statistics:</h4>
+                        <table>
+                            <tr><th>Metric</th><th>Value</th></tr>
+                            <tr><td>Mean Sales</td><td>$${meanSales.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td></tr>
+                            <tr><td>Median Sales</td><td>$${medianSales.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td></tr>
+                        </table>
+
+                        <h4>All Employees:</h4>
+                        <table>
+                            <tr><th>Name</th><th>Sales</th><th>Satisfaction</th></tr>
+                            ${employees.map(e => `
+                                <tr>
+                                    <td>${e.name}</td>
+                                    <td>$${e.sales.toLocaleString()}</td>
+                                    <td>${e.satisfaction}/5.0</td>
+                                </tr>
+                            `).join('')}
+                        </table>
+                    </div>
+                `;
+
+                document.getElementById('extremes-output').innerHTML = output;
+            });
+        }
+    </script>
+</body>
+</html>
