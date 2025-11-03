@@ -1,6 +1,6 @@
 {
   "name": "orlando-transducers",
-  "version": "0.1.2",
+  "version": "0.3.0",
   "description": "Compositional data transformation with transducers - Rust/WASM powered",
   "main": "pkg/orlando.js",
   "types": "pkg/orlando.d.ts",
@@ -34,7 +34,8 @@
     "composable",
     "category-theory"
   ],
-  "author": "Elliott Hall",
+  "author": "Justin Elliott Cobb",
+  "copyright": "Copyright (c) 2025 Justin Elliott Cobb",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/justinelliottcobb/Orlando/issues"

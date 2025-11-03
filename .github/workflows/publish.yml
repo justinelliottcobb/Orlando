@@ -93,8 +93,22 @@ jobs:
       - name: Run rustfmt check
         run: cargo fmt --all -- --check
 
+      - name: Clean pkg directory
+        run: rm -rf pkg
+
       - name: Build WASM package (release)
         run: wasm-pack build --release --target bundler --out-dir pkg
+
+      - name: Add copyright to package.json
+        run: |
+          cd pkg
+          # Add copyright field using Node.js
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.copyright = 'Copyright (c) 2025 Justin Elliott Cobb';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
 
       - name: Verify package contents
         run: |
