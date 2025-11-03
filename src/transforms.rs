@@ -5,7 +5,7 @@
 use crate::step::{cont, stop, Step};
 use crate::transducer::Transducer;
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::hash::Hash;
 use std::marker::PhantomData;
 use std::rc::Rc;
@@ -850,6 +850,95 @@ where
     }
 }
 
+/// Aperture (Window) transducer - creates a sliding window of N elements.
+///
+/// Emits overlapping windows of the specified size. Each window slides by one element.
+/// Unlike `Chunk`, windows overlap - `Aperture::new(3)` on `[1,2,3,4,5]` produces
+/// `[[1,2,3], [2,3,4], [3,4,5]]`.
+///
+/// # Examples
+///
+/// ```
+/// use orlando_transducers::transforms::Aperture;
+/// use orlando_transducers::collectors::to_vec;
+///
+/// // Sliding window of size 3
+/// let window = Aperture::new(3);
+/// let result = to_vec(&window, vec![1, 2, 3, 4, 5]);
+/// assert_eq!(result, vec![
+///     vec![1, 2, 3],
+///     vec![2, 3, 4],
+///     vec![3, 4, 5]
+/// ]);
+/// ```
+///
+/// ```
+/// use orlando_transducers::transforms::Aperture;
+/// use orlando_transducers::collectors::to_vec;
+///
+/// // Size 2 - pairs of adjacent elements
+/// let pairs = Aperture::new(2);
+/// let result = to_vec(&pairs, vec![1, 2, 3, 4]);
+/// assert_eq!(result, vec![vec![1, 2], vec![2, 3], vec![3, 4]]);
+/// ```
+///
+/// ```
+/// use orlando_transducers::transforms::Aperture;
+/// use orlando_transducers::collectors::to_vec;
+///
+/// // Not enough elements to fill window - no output
+/// let window = Aperture::new(5);
+/// let result = to_vec(&window, vec![1, 2, 3]);
+/// assert_eq!(result, Vec::<Vec<i32>>::new());
+/// ```
+pub struct Aperture<T> {
+    size: usize,
+    buffer: Rc<RefCell<VecDeque<T>>>,
+}
+
+impl<T> Aperture<T>
+where
+    T: Clone,
+{
+    pub fn new(size: usize) -> Self {
+        assert!(size > 0, "Aperture size must be greater than 0");
+        Aperture {
+            size,
+            buffer: Rc::new(RefCell::new(VecDeque::with_capacity(size))),
+        }
+    }
+}
+
+impl<T> Transducer<T, Vec<T>> for Aperture<T>
+where
+    T: Clone + 'static,
+{
+    #[inline(always)]
+    fn apply<Acc, R>(&self, reducer: R) -> Box<dyn Fn(Acc, T) -> Step<Acc>>
+    where
+        R: Fn(Acc, Vec<T>) -> Step<Acc> + 'static,
+        Acc: 'static,
+    {
+        let size = self.size;
+        let buffer = Rc::clone(&self.buffer);
+
+        Box::new(move |acc, val| {
+            let mut buf = buffer.borrow_mut();
+            buf.push_back(val);
+
+            // If buffer is at capacity, emit window and slide by removing first element
+            if buf.len() == size {
+                let window: Vec<T> = buf.iter().cloned().collect();
+                buf.pop_front(); // Slide the window
+                reducer(acc, window)
+            } else {
+                // Still accumulating elements to reach window size
+                cont(acc)
+            }
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1024,5 +1113,60 @@ mod tests {
         // Should stop after 5 elements total
         assert_eq!(result.len(), 5);
         assert_eq!(result, vec![1, 2, 3, 2, 3]);
+    }
+
+    #[test]
+    fn test_aperture_basic() {
+        use crate::collectors::to_vec;
+
+        let window = Aperture::new(3);
+        let result = to_vec(&window, vec![1, 2, 3, 4, 5]);
+        assert_eq!(result, vec![vec![1, 2, 3], vec![2, 3, 4], vec![3, 4, 5]]);
+    }
+
+    #[test]
+    fn test_aperture_size_2() {
+        use crate::collectors::to_vec;
+
+        // Pairs of adjacent elements
+        let pairs = Aperture::new(2);
+        let result = to_vec(&pairs, vec![1, 2, 3, 4]);
+        assert_eq!(result, vec![vec![1, 2], vec![2, 3], vec![3, 4]]);
+    }
+
+    #[test]
+    fn test_aperture_insufficient_elements() {
+        use crate::collectors::to_vec;
+
+        // Not enough elements to fill window
+        let window = Aperture::new(5);
+        let result = to_vec(&window, vec![1, 2, 3]);
+        assert_eq!(result, Vec::<Vec<i32>>::new());
+    }
+
+    #[test]
+    fn test_aperture_exact_fit() {
+        use crate::collectors::to_vec;
+
+        // Exactly window size - should produce one window
+        let window = Aperture::new(3);
+        let result = to_vec(&window, vec![1, 2, 3]);
+        assert_eq!(result, vec![vec![1, 2, 3]]);
+    }
+
+    #[test]
+    fn test_aperture_composition() {
+        use crate::collectors::to_vec;
+
+        // Aperture after map
+        let pipeline = Map::new(|x: i32| x * 2).compose(Aperture::new(2));
+        let result = to_vec(&pipeline, vec![1, 2, 3, 4]);
+        assert_eq!(result, vec![vec![2, 4], vec![4, 6], vec![6, 8]]);
+    }
+
+    #[test]
+    #[should_panic(expected = "Aperture size must be greater than 0")]
+    fn test_aperture_zero_size() {
+        let _window = Aperture::<i32>::new(0);
     }
 }

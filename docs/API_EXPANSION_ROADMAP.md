@@ -2,13 +2,13 @@
 
 ## Goal: Achieve 1:1+ Feature Parity with Ramda
 
-**Current Status:** 42 operations (13 transducers + 28 collectors + 1 JS helper)
+**Current Status:** 45 operations (14 transducers + 30 collectors + 1 JS helper)
 **Ramda List Operations:** ~80+
 **Target:** 50+ operations (comprehensive coverage)
 
 **Phase 1 Status:** ✅ COMPLETE (10/10 operations, 171 tests)
 **Phase 2a Status:** ✅ COMPLETE (6/6 operations, 35 tests)
-**Phase 2b Status:** ✅ COMPLETE (8/10 operations, 80 tests)
+**Phase 2b Status:** ✅ COMPLETE (10/10 operations, 96 tests)
 **Phase 3 Status:** ✅ COMPLETE (8/8 operations, 42 tests)
 
 ## Classification: Transducer vs. Collector vs. Helper
@@ -455,6 +455,196 @@ pipeline.where({ active: true, role: 'admin' })
 
 ---
 
+## Phase 6: Optics & Data Access Patterns (5-8 operations)
+
+### **Priority: FUTURE** - Functional optics for data manipulation
+
+**Rationale:** Lenses complement transducers by providing focused access to nested data structures. While transducers transform data flows, lenses enable immutable updates and focused traversals of complex structures.
+
+#### 1. **Lens** (Core optic) ⭐⭐⭐
+```rust
+pub struct Lens<S, A> {
+    get: Box<dyn Fn(&S) -> A>,
+    set: Box<dyn Fn(&S, A) -> S>,
+}
+
+// Usage
+let name_lens = Lens::new(
+    |user: &User| user.name.clone(),
+    |user: &User, name: String| User { name, ..user.clone() }
+);
+
+let user = User { name: "Alice".to_string(), age: 30 };
+let updated = name_lens.set(&user, "Bob".to_string());
+```
+
+**JavaScript API:**
+```javascript
+import { lens } from 'orlando-transducers';
+
+const nameLens = lens('name');
+const updated = nameLens.set(user, 'Bob');
+const name = nameLens.get(user); // 'Bob'
+```
+
+**Why critical:** Foundation for all optics. Enables focused immutable updates.
+
+#### 2. **Optional** (Lens for Maybe values) ⭐⭐
+```rust
+pub struct Optional<S, A> {
+    get: Box<dyn Fn(&S) -> Option<A>>,
+    set: Box<dyn Fn(&S, A) -> S>,
+}
+
+// Usage: Access nested optional fields
+let address_lens = Optional::new(
+    |user: &User| user.address.as_ref().map(|a| a.clone()),
+    |user: &User, addr: Address| User { address: Some(addr), ..user.clone() }
+);
+```
+
+**Why important:** Safe access to optional/nullable fields without exceptions.
+
+#### 3. **Prism** (Lens for sum types/enums) ⭐⭐
+```rust
+pub struct Prism<S, A> {
+    preview: Box<dyn Fn(&S) -> Option<A>>,
+    review: Box<dyn Fn(A) -> S>,
+}
+
+// Usage: Pattern match on enum variants
+enum Shape { Circle(f64), Rectangle(f64, f64) }
+
+let circle_prism = Prism::new(
+    |shape: &Shape| match shape {
+        Shape::Circle(r) => Some(*r),
+        _ => None,
+    },
+    |r: f64| Shape::Circle(r)
+);
+```
+
+**Why important:** Type-safe access to variant data in enums/tagged unions.
+
+#### 4. **Traversal** (Lens for collections) ⭐⭐⭐
+```rust
+pub struct Traversal<S, A> {
+    get_all: Box<dyn Fn(&S) -> Vec<A>>,
+    set_all: Box<dyn Fn(&S, Vec<A>) -> S>,
+}
+
+// Usage: Access all elements matching a pattern
+let all_active_users = Traversal::new(
+    |users: &Vec<User>| users.iter().filter(|u| u.active).cloned().collect(),
+    |users: &Vec<User>, active: Vec<User>| { /* merge logic */ }
+);
+```
+
+**Why critical:** Bridge between lenses and collections. Works with transducers!
+
+#### 5. **Iso (Isomorphism)** (Bidirectional conversion) ⭐
+```rust
+pub struct Iso<S, A> {
+    to: Box<dyn Fn(S) -> A>,
+    from: Box<dyn Fn(A) -> S>,
+}
+
+// Usage: Convert between equivalent representations
+let celsius_fahrenheit = Iso::new(
+    |c: f64| c * 9.0/5.0 + 32.0,
+    |f: f64| (f - 32.0) * 5.0/9.0
+);
+```
+
+**Why useful:** Lossless conversions between types.
+
+### Integration with Transducers
+
+Lenses naturally compose with transducers for powerful data pipelines:
+
+```javascript
+import { Pipeline, lens } from 'orlando-transducers';
+
+// Extract nested property, then transform
+const addressLens = lens(['address', 'street']);
+
+const pipeline = new Pipeline()
+  .map(addressLens.get)        // Extract street from user.address.street
+  .filter(street => street.length > 0)
+  .take(10)
+  .toArray(users);
+
+// Or: Batch update with transducers
+const updatedUsers = new Pipeline()
+  .map(user => addressLens.set(user, normalizeStreet(addressLens.get(user))))
+  .toArray(users);
+```
+
+**Hybrid Composition Pattern:**
+```rust
+// Pattern 1: Lens → Transducer (extract then process)
+let streets = to_vec(
+    &Map::new(|user: User| street_lens.get(&user)),
+    users
+);
+
+// Pattern 2: Transducer → Lens (filter then update)
+let active_users = to_vec(&Filter::new(|u: &User| u.active), users);
+let updated = active_users.iter()
+    .map(|u| name_lens.set(u, normalize_name(name_lens.get(u))))
+    .collect();
+```
+
+### Advanced: Lens Laws
+
+Lenses must satisfy three laws for correctness:
+
+1. **Get-Put:** `set(s, get(s)) = s` (setting to current value is no-op)
+2. **Put-Get:** `get(set(s, a)) = a` (get returns what was set)
+3. **Put-Put:** `set(set(s, a), b) = set(s, b)` (last set wins)
+
+Orlando will include property tests to verify these laws.
+
+### Implementation Phases
+
+**Phase 6a: Core Optics (3 operations)**
+1. Lens (basic getter/setter)
+2. Optional (for nullable fields)
+3. Traversal (for collections)
+
+**Phase 6b: Advanced Optics (3 operations)**
+4. Prism (for sum types)
+5. Iso (bidirectional conversions)
+6. Fold (read-only traversal with aggregation)
+
+**Phase 6c: Composition (2 operations)**
+7. Compose lenses: `lens1.compose(lens2)`
+8. Parallel lenses: `lens1.and(lens2)`
+
+### Why Phase 6 Complements Transducers
+
+| Aspect | Transducers | Lenses |
+|--------|-------------|--------|
+| **Purpose** | Stream transformation | Focused data access |
+| **Direction** | Data flow (input → output) | Bidirectional (get/set) |
+| **Composition** | Sequential pipeline | Nested composition |
+| **Use Case** | Processing collections | Updating structures |
+| **Strength** | Efficient iteration | Immutable updates |
+
+**Together:** Lenses extract data, transducers transform it, lenses write it back.
+
+```javascript
+// Real-world example: Update all active user emails
+const emailLens = lens('email');
+
+const normalizedEmails = new Pipeline()
+  .filter(user => user.active)
+  .map(user => emailLens.set(user, user.email.toLowerCase()))
+  .toArray(users);
+```
+
+---
+
 ## Implementation Priorities
 
 ### **Phase 1: Must Have** ✅ COMPLETE - 10 operations
@@ -477,7 +667,7 @@ pipeline.where({ active: true, role: 'admin' })
 5. ✅ SymmetricDifference
 6. ✅ Hybrid Composition Pattern (docs)
 
-### **Phase 2b: High-Value Operations** ✅ COMPLETE - 8 operations
+### **Phase 2b: High-Value Operations** ✅ COMPLETE - 10 operations
 11. ✅ CartesianProduct
 12. ✅ TopK
 13. ✅ ReservoirSample
@@ -486,8 +676,8 @@ pipeline.where({ active: true, role: 'admin' })
 16. ✅ ZipLongest
 17. ✅ Interpose (RepeatEach)
 18. ✅ Unique/UniqueBy
-19. ⬜ Aperture/Window
-20. ⬜ TakeLast/DropLast
+19. ✅ Aperture/Window
+20. ✅ TakeLast/DropLast
 
 ### **Phase 3: Logic Functions** ✅ COMPLETE - 8 operations
 21. ✅ both (predicate AND)
@@ -607,12 +797,12 @@ pub struct TakeLast<T> {
 
 **Target:** 50+ operations (up from 18)
 
-| Category | Phase 1 Start | Current (Phase 3 ✅) | Target |
+| Category | Phase 1 Start | Current (v0.2.0 ✅) | Target |
 |----------|---------------|---------------------|--------|
-| Transducers | 10 | 13 | 25 |
-| Collectors | 8 | 28 | 20 |
+| Transducers | 10 | 14 | 25 |
+| Collectors | 8 | 30 | 20 |
 | Helpers | 0 | 1 (JS Pluck) | 10 |
-| **Total** | **18** | **42** | **50** |
+| **Total** | **18** | **45** | **50** |
 
 **Coverage Goals:**
 - ✅ 100% of Ramda's high-frequency operations
@@ -659,7 +849,7 @@ pub struct TakeLast<T> {
 4. ✅ Add JavaScript API for Phase 1 operations
 5. ✅ Document Phase 1 operations
 6. ✅ Phase 2a: Multi-input operations (Merge, Intersection, Difference, Union, SymmetricDifference)
-7. ✅ Phase 2b: High-value collectors (CartesianProduct, TopK, ReservoirSample, PartitionBy, Frequencies, ZipLongest)
+7. ✅ Phase 2b: High-value collectors (CartesianProduct, TopK, ReservoirSample, PartitionBy, Frequencies, ZipLongest, Aperture, TakeLast, DropLast)
 8. ✅ Phase 3: Logic functions (both, either, complement, all_pass, any_pass, When, Unless, IfElse)
 9. ⬜ Add hybrid composition documentation and examples to JavaScript docs
 10. ⬜ Update JavaScript API documentation with Phase 2b and Phase 3 functions
@@ -667,6 +857,6 @@ pub struct TakeLast<T> {
 
 ---
 
-**Last Updated:** 2025-10-23
-**Status:** ✅ Phase 1, 2a, 2b, and 3 COMPLETE! (42 operations total)
+**Last Updated:** 2025-11-03
+**Status:** ✅ Phase 1, 2a, 2b (ALL 10/10), and 3 COMPLETE! (45 operations total)
 **Priority:** Document Phase 2b and Phase 3 in JavaScript API docs
