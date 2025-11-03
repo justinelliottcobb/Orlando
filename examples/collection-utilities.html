@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orlando - Collection Utilities Demo</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #2196F3;
+            padding-bottom: 10px;
+        }
+        .demo-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .demo-section h2 {
+            color: #2196F3;
+            margin-top: 0;
+        }
+        .code-block {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        .result {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 4px;
+            border-left: 4px solid #2196F3;
+            margin: 10px 0;
+        }
+        button {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0b7dda;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+            gap: 5px;
+            margin: 10px 0;
+        }
+        .grid-item {
+            background: #2196F3;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            border-radius: 4px;
+        }
+        .pattern {
+            display: inline-block;
+            padding: 5px 10px;
+            margin: 2px;
+            background: #2196F3;
+            color: white;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #f4f4f4;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Collection Utilities Demo</h1>
+    <p>Explore Orlando's collection manipulation, sorting, and generator functions.</p>
+
+    <div class="demo-section">
+        <h2>Sorting Operations</h2>
+        <p>Sort collections with custom key functions and comparators.</p>
+
+        <button onclick="runSortingDemo()">Run Sorting Examples</button>
+
+        <div id="sorting-output"></div>
+    </div>
+
+    <div class="demo-section">
+        <h2>Sequence Generators</h2>
+        <p>Generate numeric ranges, repeat patterns, and create sequences.</p>
+
+        <button onclick="runGeneratorDemo()">Generate Sequences</button>
+
+        <div id="generator-output"></div>
+    </div>
+
+    <div class="demo-section">
+        <h2>Unfold - Recursive Sequences</h2>
+        <p>Generate sequences using recursive functions.</p>
+
+        <button onclick="runUnfoldDemo()">Run Unfold Examples</button>
+
+        <div id="unfold-output"></div>
+    </div>
+
+    <div class="demo-section">
+        <h2>Path Operations</h2>
+        <p>Safely access and transform nested object properties.</p>
+
+        <button onclick="runPathDemo()">Run Path Examples</button>
+
+        <div id="path-output"></div>
+    </div>
+
+    <div class="demo-section">
+        <h2>Reverse Collections</h2>
+        <p>Reverse arrays and pipeline results.</p>
+
+        <button onclick="runReverseDemo()">Run Reverse Examples</button>
+
+        <div id="reverse-output"></div>
+    </div>
+
+    <script type="module">
+        import init, * as orlando from '../pkg/orlando.js';
+
+        await init();
+
+        window.orlando = orlando;
+        window.orlandoReady = true;
+
+        console.log('Orlando WASM module loaded successfully');
+    </script>
+
+    <script>
+        function waitForOrlando(callback) {
+            if (window.orlandoReady) {
+                callback();
+            } else {
+                setTimeout(() => waitForOrlando(callback), 100);
+            }
+        }
+
+        function runSortingDemo() {
+            waitForOrlando(() => {
+                const users = [
+                    { name: 'Charlie', age: 30, score: 85 },
+                    { name: 'Alice', age: 25, score: 92 },
+                    { name: 'Bob', age: 35, score: 78 },
+                    { name: 'Diana', age: 28, score: 88 }
+                ];
+
+                const byAge = orlando.sortBy(users, u => u.age);
+                const byName = orlando.sortBy(users, u => u.name);
+                const byScore = orlando.sortBy(users, u => u.score);
+
+                // Custom sort with comparator (descending by score)
+                const byScoreDesc = orlando.sortWith(users, (a, b) => b.score - a.score);
+
+                const output = `
+                    <div class="result">
+                        <h3>Sorted by Age (ascending)</h3>
+                        <div class="code-block">${JSON.stringify(byAge, null, 2)}</div>
+
+                        <h3>Sorted by Name (alphabetical)</h3>
+                        <div class="code-block">${JSON.stringify(byName, null, 2)}</div>
+
+                        <h3>Sorted by Score (ascending)</h3>
+                        <div class="code-block">${JSON.stringify(byScore, null, 2)}</div>
+
+                        <h3>Sorted by Score (descending with comparator)</h3>
+                        <div class="code-block">${JSON.stringify(byScoreDesc, null, 2)}</div>
+
+                        <h4>Use Cases:</h4>
+                        <ul>
+                            <li><code>sortBy</code> - Simple property-based sorting</li>
+                            <li><code>sortWith</code> - Complex comparison logic, multi-level sorting</li>
+                        </ul>
+                    </div>
+                `;
+
+                document.getElementById('sorting-output').innerHTML = output;
+            });
+        }
+
+        function runGeneratorDemo() {
+            waitForOrlando(() => {
+                const range1 = orlando.range(0, 10, 1);
+                const range2 = orlando.range(0, 20, 2);
+                const range3 = orlando.range(10, 0, -1);
+
+                const repeat1 = orlando.repeat(0, 5);
+                const repeat2 = orlando.repeat('★', 8);
+
+                const cycle1 = orlando.cycle([1, 2, 3], 3);
+                const cycle2 = orlando.cycle(['red', 'blue', 'green'], 4);
+
+                const output = `
+                    <div class="result">
+                        <h3>Range Examples</h3>
+                        <p><strong>range(0, 10, 1):</strong></p>
+                        <div class="grid">${range1.map(n => `<div class="grid-item">${n}</div>`).join('')}</div>
+
+                        <p><strong>range(0, 20, 2):</strong> (even numbers)</p>
+                        <div class="grid">${range2.map(n => `<div class="grid-item">${n}</div>`).join('')}</div>
+
+                        <p><strong>range(10, 0, -1):</strong> (countdown)</p>
+                        <div class="grid">${range3.map(n => `<div class="grid-item">${n}</div>`).join('')}</div>
+
+                        <h3>Repeat Examples</h3>
+                        <p><strong>repeat(0, 5):</strong> ${JSON.stringify(repeat1)}</p>
+                        <p><strong>repeat('★', 8):</strong> ${repeat2.join(' ')}</p>
+
+                        <h3>Cycle Examples</h3>
+                        <p><strong>cycle([1, 2, 3], 3):</strong></p>
+                        <div class="grid">${cycle1.map(n => `<div class="grid-item">${n}</div>`).join('')}</div>
+
+                        <p><strong>cycle(['red', 'blue', 'green'], 4):</strong> (repeating color pattern)</p>
+                        <div>${cycle2.map(c => `<span class="pattern" style="background: ${c};">${c}</span>`).join('')}</div>
+
+                        <h4>Use Cases:</h4>
+                        <ul>
+                            <li><code>range</code> - Generate test data, pagination indices</li>
+                            <li><code>repeat</code> - Initialize arrays with default values</li>
+                            <li><code>cycle</code> - Round-robin scheduling, repeating patterns</li>
+                        </ul>
+                    </div>
+                `;
+
+                document.getElementById('generator-output').innerHTML = output;
+            });
+        }
+
+        function runUnfoldDemo() {
+            waitForOrlando(() => {
+                // Powers of 2
+                const powersOf2 = orlando.unfold(1, x => x * 2, 8);
+
+                // Fibonacci sequence (storing pairs [a, b])
+                const fibPairs = orlando.unfold([0, 1], ([a, b]) => [b, a + b], 10);
+                const fibonacci = [0, 1, ...fibPairs.map(([a, b]) => b)];
+
+                // Factorial sequence
+                const factorials = orlando.unfold([1, 1], ([n, fact]) => [n + 1, fact * (n + 1)], 8);
+                const factorialValues = [1, ...factorials.map(([n, fact]) => fact)];
+
+                // Collatz sequence
+                const collatz = orlando.unfold(27, x => {
+                    if (x === 1) return undefined;
+                    return x % 2 === 0 ? x / 2 : 3 * x + 1;
+                }, 50);
+
+                const output = `
+                    <div class="result">
+                        <h3>Powers of 2</h3>
+                        <div class="code-block">unfold(1, x => x * 2, 8)
+Result: ${JSON.stringify(powersOf2)}</div>
+
+                        <h3>Fibonacci Sequence</h3>
+                        <div class="code-block">unfold([0, 1], ([a, b]) => [b, a + b], 10)
+Result: ${JSON.stringify(fibonacci.slice(0, 12))}</div>
+
+                        <h3>Factorial Sequence</h3>
+                        <div class="code-block">1!, 2!, 3!, 4!, 5!, 6!, 7!, 8!
+Result: ${JSON.stringify(factorialValues)}</div>
+
+                        <h3>Collatz Sequence (starting from 27)</h3>
+                        <div class="code-block">Rule: if even, divide by 2; if odd, 3n + 1
+Starting value: 27
+Result: ${JSON.stringify([27, ...collatz])}</div>
+                        <p>Stops when reaching 1 (sequence length: ${collatz.length + 1} steps)</p>
+
+                        <h4>How Unfold Works:</h4>
+                        <p><code>unfold(seed, fn, limit)</code> generates sequences by repeatedly applying <code>fn</code> to the previous value. Stops when:</p>
+                        <ul>
+                            <li>The limit is reached</li>
+                            <li>The function returns <code>undefined</code></li>
+                        </ul>
+                    </div>
+                `;
+
+                document.getElementById('unfold-output').innerHTML = output;
+            });
+        }
+
+        function runPathDemo() {
+            waitForOrlando(() => {
+                const user = {
+                    name: 'John Doe',
+                    profile: {
+                        contact: {
+                            email: 'JOHN@EXAMPLE.COM',
+                            phone: '555-1234'
+                        },
+                        preferences: {
+                            theme: 'dark',
+                            notifications: true
+                        }
+                    },
+                    age: 30
+                };
+
+                const email = orlando.path(user, ['profile', 'contact', 'email']);
+                const theme = orlando.path(user, ['profile', 'preferences', 'theme']);
+                const missing = orlando.path(user, ['profile', 'address', 'city']);
+
+                const defaultPort = orlando.pathOr(user, ['config', 'port'], 8080);
+                const defaultTheme = orlando.pathOr(user, ['profile', 'preferences', 'theme'], 'light');
+
+                const normalized = orlando.evolve(user, {
+                    name: s => s.toUpperCase(),
+                    age: n => n + 1,
+                    profile: {
+                        contact: {
+                            email: s => s.toLowerCase()
+                        }
+                    }
+                });
+
+                const output = `
+                    <div class="result">
+                        <h3>Original Object</h3>
+                        <div class="code-block">${JSON.stringify(user, null, 2)}</div>
+
+                        <h3>path() - Safe Property Access</h3>
+                        <div class="code-block">path(user, ['profile', 'contact', 'email'])
+Result: "${email}"
+
+path(user, ['profile', 'preferences', 'theme'])
+Result: "${theme}"
+
+path(user, ['profile', 'address', 'city'])
+Result: ${missing === undefined ? 'undefined (safe - no error!)' : missing}</div>
+
+                        <h3>pathOr() - With Default Values</h3>
+                        <div class="code-block">pathOr(user, ['config', 'port'], 8080)
+Result: ${defaultPort} (uses default)
+
+pathOr(user, ['profile', 'preferences', 'theme'], 'light')
+Result: "${defaultTheme}" (value exists, returns it)</div>
+
+                        <h3>evolve() - Immutable Nested Transformations</h3>
+                        <div class="code-block">evolve(user, {
+  name: s => s.toUpperCase(),
+  age: n => n + 1,
+  profile: {
+    contact: {
+      email: s => s.toLowerCase()
+    }
+  }
+})
+
+Result: ${JSON.stringify(normalized, null, 2)}
+
+Original unchanged: ${user.name} (still "${user.name}")</div>
+
+                        <h4>Use Cases:</h4>
+                        <ul>
+                            <li><code>path</code> - Avoid "Cannot read property of undefined" errors</li>
+                            <li><code>pathOr</code> - Configuration with sensible defaults</li>
+                            <li><code>evolve</code> - API response normalization, data sanitization</li>
+                        </ul>
+                    </div>
+                `;
+
+                document.getElementById('path-output').innerHTML = output;
+            });
+        }
+
+        function runReverseDemo() {
+            waitForOrlando(() => {
+                const numbers = [1, 2, 3, 4, 5];
+                const reversed = orlando.reverse(numbers);
+
+                const words = ['first', 'second', 'third', 'fourth'];
+                const reversedWords = orlando.reverse(words);
+
+                // Reverse with pipeline
+                const pipeline = new orlando.Pipeline()
+                    .filter(x => x % 2 === 0);
+                const evens = pipeline.toArray([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+                const reversedEvens = orlando.reverse(evens);
+
+                const output = `
+                    <div class="result">
+                        <h3>Simple Reverse</h3>
+                        <div class="code-block">Original: ${JSON.stringify(numbers)}
+Reversed: ${JSON.stringify(reversed)}</div>
+
+                        <h3>Reverse Strings</h3>
+                        <div class="code-block">Original: ${JSON.stringify(words)}
+Reversed: ${JSON.stringify(reversedWords)}</div>
+
+                        <h3>Reverse with Pipeline</h3>
+                        <div class="code-block">// Filter even numbers, then reverse
+const pipeline = new Pipeline().filter(x => x % 2 === 0);
+const evens = pipeline.toArray([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+const reversed = reverse(evens);
+
+Evens: ${JSON.stringify(evens)}
+Reversed: ${JSON.stringify(reversedEvens)}</div>
+
+                        <h4>Use Cases:</h4>
+                        <ul>
+                            <li>Processing items in reverse order</li>
+                            <li>Stack operations (LIFO)</li>
+                            <li>Reversing chronological data</li>
+                            <li>Creating mirror patterns</li>
+                        </ul>
+                    </div>
+                `;
+
+                document.getElementById('reverse-output').innerHTML = output;
+            });
+        }
+    </script>
+</body>
+</html>

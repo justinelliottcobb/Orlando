@@ -117,6 +117,9 @@ This runs the full workflow including `npm publish --dry-run` but doesn't actual
    - Rustfmt check
    - WASM tests
 5. **Build**: Compiles optimized WASM package
+   - Cleans pkg directory to avoid stale files
+   - Builds with wasm-pack in release mode
+   - Adds copyright metadata to generated package.json
 6. **Publish**: Publishes to npm (if triggered by tag)
 7. **Release**: Creates GitHub Release with notes and artifacts
 

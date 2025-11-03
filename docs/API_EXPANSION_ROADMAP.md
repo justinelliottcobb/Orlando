@@ -336,94 +336,324 @@ pub struct UniqWith<F, T> {
 
 ---
 
-## Phase 3: Aggregation & Math (5 operations)
+## Phase 4: Aggregation & Statistical Operations (8 operations)
 
-### **Priority: MEDIUM** - Statistical operations
+### **Priority: HIGH** - Essential for data analysis workflows
 
-#### 21. **Product** (Collector)
+**Rationale:** Statistical operations are fundamental for data analysis, reporting, and numerical computing. These operations complete Orlando's aggregation capabilities beyond basic `sum` and `count`.
+
+#### 1. **Product** (Collector) - Multiply all elements
+
 ```rust
 pub fn product<T, U, Iter>(
     transducer: &impl Transducer<T, U>,
     source: Iter
 ) -> U
-where U: Mul<Output = U> + From<u8>
+where U: Mul<Output = U> + One
 ```
 
-#### 22. **Mean** (Collector)
+**Use cases:** Mathematical calculations, geometric means, probability
+
+**JavaScript:**
+```javascript
+const result = product(Pipeline().map(x => x), [2, 3, 4]);
+// 24
+```
+
+#### 2. **Mean** (Collector) - Average value
+
 ```rust
 pub fn mean<T, U, Iter>(
     transducer: &impl Transducer<T, U>,
     source: Iter
-) -> f64
+) -> Option<f64>
+where U: Into<f64>
 ```
 
-#### 23. **Median** (Collector)
+**Use cases:** Averages, statistical analysis, dashboards
+
+**JavaScript:**
+```javascript
+const avg = mean([1, 2, 3, 4, 5]);
+// 3.0
+```
+
+#### 3. **Median** (Collector) - Middle value
+
 ```rust
 pub fn median<T, U, Iter>(
     transducer: &impl Transducer<T, U>,
     source: Iter
 ) -> Option<f64>
+where U: Into<f64> + Ord
 ```
 
-#### 24. **Min / Max** (Collectors)
+**Use cases:** Robust averages, outlier-resistant statistics
+
+**Note:** Requires sorting, O(n log n)
+
+#### 4. **Min / Max** (Collectors) - Extrema
+
 ```rust
 pub fn min<T, U, Iter>(
     transducer: &impl Transducer<T, U>,
     source: Iter
 ) -> Option<U>
 where U: Ord
+
+pub fn max<T, U, Iter>(
+    transducer: &impl Transducer<T, U>,
+    source: Iter
+) -> Option<U>
+where U: Ord
 ```
 
-#### 25. **MinBy / MaxBy** (Collectors)
+**Use cases:** Range finding, bounds checking, validation
+
+#### 5. **MinBy / MaxBy** (Collectors) - Extrema by key function
+
 ```rust
 pub fn min_by<T, U, K, Iter, F>(
     transducer: &impl Transducer<T, U>,
     source: Iter,
     key_fn: F
 ) -> Option<U>
-where K: Ord
+where K: Ord, F: Fn(&U) -> K
 ```
+
+**Use cases:** Finding cheapest item, oldest record, etc.
+
+**JavaScript:**
+```javascript
+const cheapest = minBy(products, p => p.price);
+const oldest = maxBy(users, u => u.createdAt);
+```
+
+#### 6. **Variance / StdDev** (Collectors) - Spread measures
+
+```rust
+pub fn variance<T, U, Iter>(
+    transducer: &impl Transducer<T, U>,
+    source: Iter
+) -> Option<f64>
+
+pub fn std_dev<T, U, Iter>(
+    transducer: &impl Transducer<T, U>,
+    source: Iter
+) -> Option<f64>
+```
+
+**Use cases:** Statistical analysis, anomaly detection, quality control
+
+#### 7. **Quantile** (Collector) - Percentile values
+
+```rust
+pub fn quantile<T, U, Iter>(
+    transducer: &impl Transducer<T, U>,
+    source: Iter,
+    p: f64  // 0.0 to 1.0
+) -> Option<f64>
+```
+
+**Use cases:** Percentile calculations, performance metrics (p95, p99)
+
+**JavaScript:**
+```javascript
+const p95 = quantile(responseTimes, 0.95);
+const p50 = quantile(responseTimes, 0.50); // Same as median
+```
+
+#### 8. **Mode** (Collector) - Most frequent value
+
+```rust
+pub fn mode<T, U, Iter>(
+    transducer: &impl Transducer<T, U>,
+    source: Iter
+) -> Option<U>
+where U: Hash + Eq
+```
+
+**Use cases:** Finding most common category, majority voting
 
 ---
 
-## Phase 4: Advanced Operations (10 operations)
+## Phase 5: Collection Utilities & Advanced Helpers (10 operations)
 
-### **Priority: LOW** - Nice-to-have, less common
+### **Priority: MEDIUM** - Non-streaming operations that add value
 
-#### 26-30. **Set Operations** (Collectors)
-- `union` - Combine unique elements
-- `intersection` - Common elements
-- `difference` - Elements in A but not B
-- `symmetric_difference` - Elements in A or B but not both
-- `cartesian_product` - All pairs
+**Rationale:** These operations don't fit the pure transducer model (they require full collections or generate sequences) but provide essential utilities for complete data manipulation workflows.
 
-#### 31-32. **Sorting** (Helpers)
-- `sort_by` - Sort by key function
-- `sort_with` - Sort with custom comparator
+### **5a: Sorting & Reversal** (3 operations)
 
-**Note:** Sorting doesn't fit transducer model (requires full collection).
+#### 1. **SortBy** (Helper) - Sort by key function
 
-#### 33. **Reverse** (Helper)
 ```rust
-pub fn reverse<T>(vec: Vec<T>) -> Vec<T>
+pub fn sort_by<T, K, F>(
+    transducer: &impl Transducer<T, T>,
+    source: Iter,
+    key_fn: F
+) -> Vec<T>
+where K: Ord, F: Fn(&T) -> K
 ```
 
-**Note:** Requires full collection, can't stream.
+**Use cases:** Ordering by property, multi-criteria sorting
 
-#### 34. **Unfold** (Generator)
-```rust
-pub fn unfold<T, F>(seed: T, f: F) -> impl Iterator<Item = T>
+**Note:** Not a transducer (requires full collection), but valuable utility.
+
+**JavaScript:**
+```javascript
+const sorted = sortBy(users, u => u.lastName);
+const byDate = sortBy(events, e => e.timestamp);
 ```
 
-#### 35. **Repeat / Cycle** (Generators)
+#### 2. **SortWith** (Helper) - Sort with comparator
+
 ```rust
-pub fn repeat<T>(value: T, n: usize) -> Vec<T>
-pub fn cycle<T>(vec: Vec<T>, n: usize) -> Vec<T>
+pub fn sort_with<T, F>(
+    transducer: &impl Transducer<T, T>,
+    source: Iter,
+    comparator: F
+) -> Vec<T>
+where F: Fn(&T, &T) -> Ordering
 ```
+
+**Use cases:** Custom sorting logic, complex comparisons
+
+#### 3. **Reverse** (Helper) - Reverse collection
+
+```rust
+pub fn reverse<T, U, Iter>(
+    transducer: &impl Transducer<T, U>,
+    source: Iter
+) -> Vec<U>
+```
+
+**Use cases:** Reversing order, LIFO processing
+
+**JavaScript:**
+```javascript
+const reversed = reverse([1, 2, 3, 4, 5]);
+// [5, 4, 3, 2, 1]
+```
+
+### **5b: Generators & Sequences** (4 operations)
+
+#### 4. **Range** (Generator) - Generate numeric sequences
+
+```rust
+pub fn range(start: i32, end: i32, step: i32) -> Vec<i32>
+```
+
+**Use cases:** Index generation, iteration ranges
+
+**JavaScript:**
+```javascript
+const indices = range(0, 10, 1);
+// [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+const evens = range(0, 20, 2);
+// [0, 2, 4, 6, 8, 10, 12, 14, 16, 18]
+```
+
+#### 5. **Repeat** (Generator) - Repeat value N times
+
+```rust
+pub fn repeat<T: Clone>(value: T, n: usize) -> Vec<T>
+```
+
+**Use cases:** Padding, initialization, test data
+
+**JavaScript:**
+```javascript
+const zeros = repeat(0, 10);
+const template = repeat({ status: 'pending' }, 5);
+```
+
+#### 6. **Cycle** (Generator) - Repeat collection N times
+
+```rust
+pub fn cycle<T: Clone>(vec: Vec<T>, n: usize) -> Vec<T>
+```
+
+**Use cases:** Pattern repetition, round-robin
+
+**JavaScript:**
+```javascript
+const pattern = cycle([1, 2, 3], 3);
+// [1, 2, 3, 1, 2, 3, 1, 2, 3]
+```
+
+#### 7. **Unfold** (Generator) - Generate from seed
+
+```rust
+pub fn unfold<T, F>(seed: T, f: F, limit: usize) -> Vec<T>
+where F: Fn(&T) -> Option<T>
+```
+
+**Use cases:** Fibonacci sequences, state-based generation
+
+**JavaScript:**
+```javascript
+const fibonacci = unfold([0, 1], ([a, b]) => [b, a + b], 10);
+// Generates first 10 Fibonacci numbers
+```
+
+### **5c: Path Operations** (3 operations)
+
+**These facilitate Phase 6 (Lenses) by providing path-based access**
+
+#### 8. **Path** (Helper) - Deep property access
+
+```rust
+pub fn path<T>(obj: &T, path: &[&str]) -> Option<JsValue>
+```
+
+**Use cases:** Nested property extraction, safe navigation
+
+**JavaScript:**
+```javascript
+const name = path(user, ['profile', 'name']);
+const zip = path(user, ['address', 'billing', 'zipCode']);
+```
+
+**Why for Phase 6:** Provides foundation for lens path syntax
+
+#### 9. **PathOr** (Helper) - Deep access with default
+
+```rust
+pub fn path_or<T, D>(obj: &T, path: &[&str], default: D) -> JsValue
+```
+
+**Use cases:** Safe access with fallback
+
+**JavaScript:**
+```javascript
+const name = pathOr(user, ['profile', 'name'], 'Anonymous');
+```
+
+#### 10. **Evolve** (Helper) - Transform nested structure
+
+```rust
+pub struct Evolver {
+    // Map of path -> transformer function
+}
+```
+
+**Use cases:** Complex nested updates, immutable transformations
+
+**JavaScript:**
+```javascript
+const updated = evolve(user, {
+  'age': x => x + 1,
+  'profile.name': name => name.toUpperCase()
+});
+```
+
+**Why for Phase 6:** Demonstrates the value of lenses before implementing full optics
 
 ---
 
-## Phase 5: JavaScript-Specific Enhancements (5 operations)
+## Phase 5-JS: JavaScript-Specific Enhancements (5 operations)
 
 ### **Priority: MEDIUM** - Better DX for JS users
 
@@ -689,11 +919,39 @@ const normalizedEmails = new Pipeline()
 27. ✅ Unless (inverse conditional)
 28. ✅ IfElse (branch on condition)
 
-### **Nice to Have (Future)** - 15 operations
-21-35. Aggregation, set operations, sorting, etc.
+### **Phase 4: Aggregation & Statistical Operations** - 8 operations
+1. Product (multiply all)
+2. Mean (average)
+3. Median (middle value)
+4. Min / Max (extrema)
+5. MinBy / MaxBy (extrema by key)
+6. Variance / StdDev (spread)
+7. Quantile (percentiles)
+8. Mode (most frequent)
 
-### **JS Enhancements (Ongoing)** - 5 operations
-36-40. Developer experience improvements for JavaScript users
+**Priority: HIGH** - Essential for data analysis and numerical computing
+
+### **Phase 5: Collection Utilities & Advanced Helpers** - 10 operations
+**5a: Sorting & Reversal (3)**
+1. SortBy
+2. SortWith
+3. Reverse
+
+**5b: Generators & Sequences (4)**
+4. Range
+5. Repeat
+6. Cycle
+7. Unfold
+
+**5c: Path Operations (3)** - Facilitate Phase 6
+8. Path (deep access)
+9. PathOr (with default)
+10. Evolve (nested transform)
+
+**Priority: MEDIUM** - Non-streaming utilities, Phase 6 foundation
+
+### **Phase 5-JS: JavaScript Enhancements** - 5 operations
+Additional JavaScript-specific DX improvements
 
 ---
 
@@ -795,14 +1053,15 @@ pub struct TakeLast<T> {
 
 ## Success Metrics
 
-**Target:** 50+ operations (up from 18)
+**Comprehensive Roadmap Goals**
 
-| Category | Phase 1 Start | Current (v0.2.0 ✅) | Target |
-|----------|---------------|---------------------|--------|
-| Transducers | 10 | 14 | 25 |
-| Collectors | 8 | 30 | 20 |
-| Helpers | 0 | 1 (JS Pluck) | 10 |
-| **Total** | **18** | **45** | **50** |
+| Category | Phase 1 Start | Current (v0.2.0) | After Phase 4-5 | With Phase 6 | Target |
+|----------|---------------|------------------|-----------------|--------------|--------|
+| Transducers | 10 | 14 | 16 | 16 | 18 |
+| Collectors | 8 | 30 | 41 | 41 | 45 |
+| Helpers | 0 | 1 | 11 | 11 | 13 |
+| Optics | 0 | 0 | 0 | 8 | 8 |
+| **Total** | **18** | **45** | **68** | **76** | **84** |
 
 **Coverage Goals:**
 - ✅ 100% of Ramda's high-frequency operations
