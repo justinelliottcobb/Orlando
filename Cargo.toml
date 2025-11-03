@@ -2,6 +2,7 @@
 name = "orlando-transducers"
 version = "0.2.0"
 edition = "2021"
+authors = ["Justin Elliott Cobb"]
 description = "Compositional data transformation with transducers"
 license = "MIT"
 repository = "https://github.com/justinelliottcobb/Orlando"
