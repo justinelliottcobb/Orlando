@@ -101,10 +101,11 @@ pub use transforms::{
 
 // Re-export collectors
 pub use collectors::{
-    cartesian_product, contains, count, difference, drop_last, every, find, first, frequencies,
-    group_by, intersection, last, max, max_by, mean, median, merge, min, min_by, mode, none,
-    partition, partition_by, product, quantile, reduce, reservoir_sample, some, std_dev, sum,
-    symmetric_difference, take_last, to_vec, top_k, union, variance, zip, zip_longest, zip_with,
+    cartesian_product, contains, count, cycle, difference, drop_last, every, find, first,
+    frequencies, group_by, intersection, last, max, max_by, mean, median, merge, min, min_by, mode,
+    none, partition, partition_by, product, quantile, range, reduce, repeat, reservoir_sample,
+    reverse, some, sort_by, sort_with, std_dev, sum, symmetric_difference, take_last, to_vec,
+    top_k, unfold, union, variance, zip, zip_longest, zip_with,
 };
 
 // Re-export logic functions and conditional transducers

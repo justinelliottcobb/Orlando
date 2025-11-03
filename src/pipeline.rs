@@ -1109,3 +1109,415 @@ pub fn mode(source: &Array) -> JsValue {
         .map(|(_, (value, _))| value)
         .unwrap_or(JsValue::undefined())
 }
+
+// ============================================================================
+// Phase 5c: Path Operations (JavaScript-specific)
+// ============================================================================
+
+/// Access a nested property using a path array.
+///
+/// Returns undefined if any part of the path doesn't exist.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { path } from 'orlando-transducers';
+///
+/// const user = {
+///   profile: {
+///     name: 'Alice',
+///     address: {
+///       city: 'NYC'
+///     }
+///   }
+/// };
+///
+/// const name = path(user, ['profile', 'name']);
+/// // 'Alice'
+///
+/// const city = path(user, ['profile', 'address', 'city']);
+/// // 'NYC'
+///
+/// const missing = path(user, ['profile', 'age']);
+/// // undefined
+/// ```
+#[wasm_bindgen]
+pub fn path(obj: &JsValue, path_array: &Array) -> JsValue {
+    let mut current = obj.clone();
+
+    for i in 0..path_array.length() {
+        let key = path_array.get(i);
+
+        if let Some(key_str) = key.as_string() {
+            match Reflect::get(&current, &JsValue::from_str(&key_str)) {
+                Ok(value) => {
+                    if value.is_undefined() {
+                        return JsValue::undefined();
+                    }
+                    current = value;
+                }
+                Err(_) => return JsValue::undefined(),
+            }
+        } else {
+            return JsValue::undefined();
+        }
+    }
+
+    current
+}
+
+/// Access a nested property with a default value.
+///
+/// Returns the default value if any part of the path doesn't exist.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { pathOr } from 'orlando-transducers';
+///
+/// const user = {
+///   profile: {
+///     name: 'Alice'
+///   }
+/// };
+///
+/// const name = pathOr(user, ['profile', 'name'], 'Anonymous');
+/// // 'Alice'
+///
+/// const age = pathOr(user, ['profile', 'age'], 0);
+/// // 0 (default value)
+/// ```
+#[wasm_bindgen(js_name = pathOr)]
+pub fn path_or(obj: &JsValue, path_array: &Array, default: &JsValue) -> JsValue {
+    let result = path(obj, path_array);
+
+    if result.is_undefined() {
+        default.clone()
+    } else {
+        result
+    }
+}
+
+/// Transform nested properties using a transformation object.
+///
+/// Applies transformation functions to specific paths in an object,
+/// returning a new object with the transformations applied.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { evolve } from 'orlando-transducers';
+///
+/// const user = {
+///   name: 'alice',
+///   age: 25,
+///   profile: {
+///     bio: 'hello world'
+///   }
+/// };
+///
+/// const transformations = {
+///   name: (n) => n.toUpperCase(),
+///   age: (a) => a + 1,
+///   'profile.bio': (b) => b + '!'
+/// };
+///
+/// const evolved = evolve(user, transformations);
+/// // {
+/// //   name: 'ALICE',
+/// //   age: 26,
+/// //   profile: { bio: 'hello world!' }
+/// // }
+/// ```
+#[wasm_bindgen]
+pub fn evolve(obj: &JsValue, transformations: &JsValue) -> Result<JsValue, JsValue> {
+    // Clone the object to avoid mutation
+    let json_string = js_sys::JSON::stringify(obj)?;
+    let result = js_sys::JSON::parse(&json_string.as_string().unwrap_or_default())?;
+
+    // Get all transformation keys
+    let keys = js_sys::Object::keys(&js_sys::Object::from(transformations.clone()));
+
+    for i in 0..keys.length() {
+        let key_str = keys.get(i).as_string().unwrap();
+
+        // Get the transformation function
+        if let Ok(transform_fn) = Reflect::get(transformations, &JsValue::from_str(&key_str)) {
+            if !transform_fn.is_function() {
+                continue;
+            }
+
+            let func = js_sys::Function::from(transform_fn);
+
+            // Handle nested paths (e.g., "profile.bio")
+            if key_str.contains('.') {
+                let path_parts: Vec<&str> = key_str.split('.').collect();
+                let path_array = Array::new();
+                for part in &path_parts {
+                    path_array.push(&JsValue::from_str(part));
+                }
+
+                // Get the current value at this path
+                let current_value = path(&result, &path_array);
+
+                if !current_value.is_undefined() {
+                    // Apply transformation
+                    let this = JsValue::null();
+                    if let Ok(new_value) = func.call1(&this, &current_value) {
+                        // Set the new value at the nested path
+                        let mut target = result.clone();
+                        for (idx, part) in path_parts.iter().enumerate() {
+                            if idx == path_parts.len() - 1 {
+                                // Last part - set the value
+                                let _ = Reflect::set(&target, &JsValue::from_str(part), &new_value);
+                            } else {
+                                // Navigate deeper
+                                if let Ok(next) = Reflect::get(&target, &JsValue::from_str(part)) {
+                                    target = next;
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Simple top-level property
+                if let Ok(current_value) = Reflect::get(&result, &JsValue::from_str(&key_str)) {
+                    let this = JsValue::null();
+                    if let Ok(new_value) = func.call1(&this, &current_value) {
+                        let _ = Reflect::set(&result, &JsValue::from_str(&key_str), &new_value);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(result)
+}
+
+// ============================================================================
+// Phase 5a & 5b: Collection Utilities (JavaScript Bindings)
+// ============================================================================
+
+/// Sort array elements by a key function.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { sortBy } from 'orlando-transducers';
+///
+/// const users = [
+///   { name: 'Alice', age: 30 },
+///   { name: 'Bob', age: 25 },
+///   { name: 'Charlie', age: 35 }
+/// ];
+///
+/// const sorted = sortBy(users, u => u.age);
+/// // [{ name: 'Bob', age: 25 }, ...]
+/// ```
+#[wasm_bindgen(js_name = sortBy)]
+pub fn sort_by(source: &Array, key_fn: &Function) -> Array {
+    let len = source.length();
+    let mut items: Vec<(JsValue, f64)> = Vec::new();
+
+    let this = JsValue::null();
+    for i in 0..len {
+        let item = source.get(i);
+        if let Ok(key) = key_fn.call1(&this, &item) {
+            if let Some(key_num) = key.as_f64() {
+                items.push((item, key_num));
+            }
+        }
+    }
+
+    items.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    let result = Array::new();
+    for (item, _) in items {
+        result.push(&item);
+    }
+    result
+}
+
+/// Sort array elements with a custom comparator.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { sortWith } from 'orlando-transducers';
+///
+/// const numbers = [3, 1, 4, 1, 5, 9, 2, 6];
+/// const descending = sortWith(numbers, (a, b) => b - a);
+/// // [9, 6, 5, 4, 3, 2, 1, 1]
+/// ```
+#[wasm_bindgen(js_name = sortWith)]
+pub fn sort_with(source: &Array, comparator: &Function) -> Array {
+    let len = source.length();
+    let mut items: Vec<JsValue> = Vec::new();
+
+    for i in 0..len {
+        items.push(source.get(i));
+    }
+
+    let this = JsValue::null();
+    items.sort_by(|a, b| {
+        if let Ok(result) = comparator.call2(&this, a, b) {
+            if let Some(cmp) = result.as_f64() {
+                if cmp < 0.0 {
+                    return std::cmp::Ordering::Less;
+                } else if cmp > 0.0 {
+                    return std::cmp::Ordering::Greater;
+                }
+            }
+        }
+        std::cmp::Ordering::Equal
+    });
+
+    let result = Array::new();
+    for item in items {
+        result.push(&item);
+    }
+    result
+}
+
+/// Reverse the order of array elements.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { reverse } from 'orlando-transducers';
+///
+/// const reversed = reverse([1, 2, 3, 4, 5]);
+/// // [5, 4, 3, 2, 1]
+/// ```
+#[wasm_bindgen]
+pub fn reverse(source: &Array) -> Array {
+    let len = source.length();
+    let result = Array::new();
+
+    for i in (0..len).rev() {
+        result.push(&source.get(i));
+    }
+
+    result
+}
+
+/// Generate a range of numbers.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { range } from 'orlando-transducers';
+///
+/// const numbers = range(0, 10, 1);
+/// // [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+///
+/// const evens = range(0, 20, 2);
+/// // [0, 2, 4, 6, 8, 10, 12, 14, 16, 18]
+/// ```
+#[wasm_bindgen]
+pub fn range(start: i32, end: i32, step: i32) -> Array {
+    let result = Array::new();
+
+    if step == 0 {
+        return result;
+    }
+
+    let mut current = start;
+    if step > 0 {
+        while current < end {
+            result.push(&JsValue::from_f64(current as f64));
+            current += step;
+        }
+    } else {
+        while current > end {
+            result.push(&JsValue::from_f64(current as f64));
+            current += step;
+        }
+    }
+
+    result
+}
+
+/// Repeat a value N times.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { repeat } from 'orlando-transducers';
+///
+/// const zeros = repeat(0, 5);
+/// // [0, 0, 0, 0, 0]
+///
+/// const template = repeat({ status: 'pending' }, 3);
+/// // [{ status: 'pending' }, ...]
+/// ```
+#[wasm_bindgen]
+pub fn repeat(value: &JsValue, n: u32) -> Array {
+    let result = Array::new();
+
+    for _ in 0..n {
+        result.push(value);
+    }
+
+    result
+}
+
+/// Repeat an array N times.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { cycle } from 'orlando-transducers';
+///
+/// const pattern = cycle([1, 2, 3], 3);
+/// // [1, 2, 3, 1, 2, 3, 1, 2, 3]
+/// ```
+#[wasm_bindgen]
+pub fn cycle(source: &Array, n: u32) -> Array {
+    let len = source.length();
+    let result = Array::new();
+
+    for _ in 0..n {
+        for i in 0..len {
+            result.push(&source.get(i));
+        }
+    }
+
+    result
+}
+
+/// Generate values by unfolding from a seed.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { unfold } from 'orlando-transducers';
+///
+/// // Generate powers of 2
+/// const powers = unfold(1, x => {
+///   const next = x * 2;
+///   return next <= 1000 ? next : null;
+/// }, 20);
+/// // [2, 4, 8, 16, 32, 64, 128, 256, 512]
+/// ```
+#[wasm_bindgen]
+pub fn unfold(seed: &JsValue, f: &Function, limit: u32) -> Array {
+    let result = Array::new();
+    let mut current = seed.clone();
+    let this = JsValue::null();
+
+    for _ in 0..limit {
+        match f.call1(&this, &current) {
+            Ok(next) => {
+                if next.is_null() || next.is_undefined() {
+                    break;
+                }
+                result.push(&next);
+                current = next;
+            }
+            Err(_) => break,
+        }
+    }
+
+    result
+}
