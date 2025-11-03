@@ -52,8 +52,17 @@ if ! cargo test --lib --target "$NATIVE_TARGET" --quiet; then
 fi
 echo -e "${GREEN}✅ Unit tests passed${NC}\n"
 
-# 4. Integration tests (quick mode - skip heavy property tests)
-echo -e "${YELLOW}4. Running integration tests...${NC}"
+# 4. Documentation tests
+echo -e "${YELLOW}4. Running documentation tests...${NC}"
+if ! cargo test --doc --target "$NATIVE_TARGET" --quiet; then
+    echo -e "${RED}❌ Documentation tests failed!${NC}"
+    echo -e "${YELLOW}💡 Fix failing doctests before committing${NC}\n"
+    exit 1
+fi
+echo -e "${GREEN}✅ Documentation tests passed${NC}\n"
+
+# 5. Integration tests (quick mode - skip heavy property tests)
+echo -e "${YELLOW}5. Running integration tests...${NC}"
 if ! cargo test --test integration --target "$NATIVE_TARGET" --quiet; then
     echo -e "${RED}❌ Integration tests failed!${NC}"
     echo -e "${YELLOW}💡 Fix failing integration tests before committing${NC}\n"
@@ -61,8 +70,8 @@ if ! cargo test --test integration --target "$NATIVE_TARGET" --quiet; then
 fi
 echo -e "${GREEN}✅ Integration tests passed${NC}\n"
 
-# 5. WASM build check
-echo -e "${YELLOW}5. Running WASM build check...${NC}"
+# 6. WASM build check
+echo -e "${YELLOW}6. Running WASM build check...${NC}"
 if ! cargo build --lib --target wasm32-unknown-unknown --quiet; then
     echo -e "${RED}❌ WASM build failed!${NC}"
     echo -e "${YELLOW}💡 Fix WASM build errors before committing${NC}\n"
@@ -70,8 +79,8 @@ if ! cargo build --lib --target wasm32-unknown-unknown --quiet; then
 fi
 echo -e "${GREEN}✅ WASM build check passed${NC}\n"
 
-# 6. Native build check
-echo -e "${YELLOW}6. Running native build check...${NC}"
+# 7. Native build check
+echo -e "${YELLOW}7. Running native build check...${NC}"
 if ! cargo build --target "$NATIVE_TARGET" --quiet; then
     echo -e "${RED}❌ Native build failed!${NC}"
     echo -e "${YELLOW}💡 Fix build errors before committing${NC}\n"
