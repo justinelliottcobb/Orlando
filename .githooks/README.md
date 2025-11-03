@@ -9,6 +9,7 @@ Runs before every commit. Performs:
 - ✅ **rustfmt** - Code formatting check
 - ✅ **clippy** - Linting and best practices
 - ✅ **Unit tests** - Fast test suite
+- ✅ **Documentation tests** - Validates code examples in docs
 - ✅ **Integration tests** - End-to-end tests
 - ✅ **Build check** - Ensures code compiles
 
@@ -103,6 +104,7 @@ git config core.hooksPath
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test --lib --target x86_64-unknown-linux-gnu
+cargo test --doc --target x86_64-unknown-linux-gnu
 ```
 
 ### Permission errors
