@@ -821,3 +821,291 @@ pub fn aperture(source: &Array, size: u32) -> Array {
 
     result
 }
+
+// ============================================================================
+// Phase 4: Aggregation & Statistical Operations (JavaScript Bindings)
+// ============================================================================
+
+/// Calculate the product of all numbers in an array.
+#[wasm_bindgen]
+pub fn product(source: &Array) -> f64 {
+    let mut result = 1.0;
+    for i in 0..source.length() {
+        let val = source.get(i);
+        if let Some(num) = val.as_f64() {
+            result *= num;
+        }
+    }
+    result
+}
+
+/// Calculate the arithmetic mean (average) of numbers in an array.
+#[wasm_bindgen]
+pub fn mean(source: &Array) -> JsValue {
+    let len = source.length();
+    if len == 0 {
+        return JsValue::undefined();
+    }
+
+    let mut sum = 0.0;
+    for i in 0..len {
+        let val = source.get(i);
+        if let Some(num) = val.as_f64() {
+            sum += num;
+        }
+    }
+
+    JsValue::from_f64(sum / (len as f64))
+}
+
+/// Find the median (middle value) of numbers in an array.
+#[wasm_bindgen]
+pub fn median(source: &Array) -> JsValue {
+    let len = source.length();
+    if len == 0 {
+        return JsValue::undefined();
+    }
+
+    let mut values: Vec<f64> = Vec::new();
+    for i in 0..len {
+        let val = source.get(i);
+        if let Some(num) = val.as_f64() {
+            values.push(num);
+        }
+    }
+
+    if values.is_empty() {
+        return JsValue::undefined();
+    }
+
+    values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mid = values.len() / 2;
+    if values.len() % 2 == 1 {
+        JsValue::from_f64(values[mid])
+    } else {
+        JsValue::from_f64((values[mid - 1] + values[mid]) / 2.0)
+    }
+}
+
+/// Find the minimum value in an array.
+#[wasm_bindgen]
+pub fn min(source: &Array) -> JsValue {
+    let len = source.length();
+    if len == 0 {
+        return JsValue::undefined();
+    }
+
+    let mut min_val = f64::INFINITY;
+    for i in 0..len {
+        let val = source.get(i);
+        if let Some(num) = val.as_f64() {
+            if num < min_val {
+                min_val = num;
+            }
+        }
+    }
+
+    if min_val == f64::INFINITY {
+        JsValue::undefined()
+    } else {
+        JsValue::from_f64(min_val)
+    }
+}
+
+/// Find the maximum value in an array.
+#[wasm_bindgen]
+pub fn max(source: &Array) -> JsValue {
+    let len = source.length();
+    if len == 0 {
+        return JsValue::undefined();
+    }
+
+    let mut max_val = f64::NEG_INFINITY;
+    for i in 0..len {
+        let val = source.get(i);
+        if let Some(num) = val.as_f64() {
+            if num > max_val {
+                max_val = num;
+            }
+        }
+    }
+
+    if max_val == f64::NEG_INFINITY {
+        JsValue::undefined()
+    } else {
+        JsValue::from_f64(max_val)
+    }
+}
+
+/// Find the element with the minimum value for a given key function.
+#[wasm_bindgen(js_name = minBy)]
+pub fn min_by(source: &Array, key_fn: &Function) -> JsValue {
+    let len = source.length();
+    if len == 0 {
+        return JsValue::undefined();
+    }
+
+    let mut min_element = JsValue::undefined();
+    let mut min_key = f64::INFINITY;
+
+    let this = JsValue::null();
+    for i in 0..len {
+        let element = source.get(i);
+        if let Ok(key_val) = key_fn.call1(&this, &element) {
+            if let Some(key) = key_val.as_f64() {
+                if key < min_key {
+                    min_key = key;
+                    min_element = element;
+                }
+            }
+        }
+    }
+
+    min_element
+}
+
+/// Find the element with the maximum value for a given key function.
+#[wasm_bindgen(js_name = maxBy)]
+pub fn max_by(source: &Array, key_fn: &Function) -> JsValue {
+    let len = source.length();
+    if len == 0 {
+        return JsValue::undefined();
+    }
+
+    let mut max_element = JsValue::undefined();
+    let mut max_key = f64::NEG_INFINITY;
+
+    let this = JsValue::null();
+    for i in 0..len {
+        let element = source.get(i);
+        if let Ok(key_val) = key_fn.call1(&this, &element) {
+            if let Some(key) = key_val.as_f64() {
+                if key > max_key {
+                    max_key = key;
+                    max_element = element;
+                }
+            }
+        }
+    }
+
+    max_element
+}
+
+/// Calculate the variance of numbers in an array.
+#[wasm_bindgen]
+pub fn variance(source: &Array) -> JsValue {
+    let len = source.length();
+    if len < 2 {
+        return JsValue::undefined();
+    }
+
+    let mut values: Vec<f64> = Vec::new();
+    for i in 0..len {
+        let val = source.get(i);
+        if let Some(num) = val.as_f64() {
+            values.push(num);
+        }
+    }
+
+    if values.len() < 2 {
+        return JsValue::undefined();
+    }
+
+    let n = values.len() as f64;
+    let mean_val: f64 = values.iter().sum::<f64>() / n;
+
+    let sum_squared_diff: f64 = values
+        .iter()
+        .map(|x| {
+            let diff = x - mean_val;
+            diff * diff
+        })
+        .sum();
+
+    JsValue::from_f64(sum_squared_diff / (n - 1.0))
+}
+
+/// Calculate the standard deviation of numbers in an array.
+#[wasm_bindgen(js_name = stdDev)]
+pub fn std_dev(source: &Array) -> JsValue {
+    match variance(source) {
+        v if v.is_undefined() => JsValue::undefined(),
+        v => {
+            let var_val = v.as_f64().unwrap();
+            JsValue::from_f64(var_val.sqrt())
+        }
+    }
+}
+
+/// Calculate a quantile (percentile) value.
+#[wasm_bindgen]
+pub fn quantile(source: &Array, p: f64) -> JsValue {
+    if !(0.0..=1.0).contains(&p) {
+        return JsValue::undefined();
+    }
+
+    let len = source.length();
+    if len == 0 {
+        return JsValue::undefined();
+    }
+
+    let mut values: Vec<f64> = Vec::new();
+    for i in 0..len {
+        let val = source.get(i);
+        if let Some(num) = val.as_f64() {
+            values.push(num);
+        }
+    }
+
+    if values.is_empty() {
+        return JsValue::undefined();
+    }
+
+    values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+    let n = values.len();
+    if n == 1 {
+        return JsValue::from_f64(values[0]);
+    }
+
+    let index = p * (n - 1) as f64;
+    let lower = index.floor() as usize;
+    let upper = index.ceil() as usize;
+
+    if lower == upper {
+        JsValue::from_f64(values[lower])
+    } else {
+        let weight = index - lower as f64;
+        JsValue::from_f64(values[lower] * (1.0 - weight) + values[upper] * weight)
+    }
+}
+
+/// Find the mode (most frequent element) in an array.
+#[wasm_bindgen]
+pub fn mode(source: &Array) -> JsValue {
+    use std::collections::HashMap;
+
+    let len = source.length();
+    if len == 0 {
+        return JsValue::undefined();
+    }
+
+    let mut freq_map: HashMap<String, (JsValue, usize)> = HashMap::new();
+
+    for i in 0..len {
+        let element = source.get(i);
+        let key = format!("{:?}", element);
+
+        freq_map
+            .entry(key)
+            .and_modify(|(_, count)| *count += 1)
+            .or_insert((element.clone(), 1));
+    }
+
+    freq_map
+        .into_iter()
+        .max_by_key(|(_, (_, count))| *count)
+        .map(|(_, (value, _))| value)
+        .unwrap_or(JsValue::undefined())
+}

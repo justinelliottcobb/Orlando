@@ -1209,6 +1209,439 @@ where
     }
 }
 
+// ============================================================================
+// Phase 4: Aggregation & Statistical Operations
+// ============================================================================
+
+/// Multiply all elements together (product).
+///
+/// Returns the product of all elements after applying the transducer.
+/// For empty sequences, returns 1 (multiplicative identity).
+///
+/// # Examples
+///
+/// ```
+/// use orlando_transducers::{product, transducer::Identity};
+///
+/// let id = Identity::new();
+/// let result = product(&id, vec![2, 3, 4]);
+/// assert_eq!(result, 24);
+/// ```
+///
+/// ```
+/// use orlando_transducers::{product, transforms::Map};
+///
+/// let double = Map::new(|x: i32| x * 2);
+/// let result = product(&double, vec![1, 2, 3]);
+/// assert_eq!(result, 48); // (1*2) * (2*2) * (3*2) = 2 * 4 * 6
+/// ```
+pub fn product<T, U, Iter>(transducer: &impl Transducer<T, U>, source: Iter) -> U
+where
+    T: 'static,
+    U: std::ops::Mul<Output = U> + From<u8> + 'static,
+    Iter: IntoIterator<Item = T>,
+{
+    reduce(transducer, source, U::from(1u8), |acc, x| cont(acc * x))
+}
+
+/// Calculate the arithmetic mean (average) of elements.
+///
+/// Returns `None` for empty sequences, otherwise returns `Some(mean)`.
+/// All elements are converted to `f64` for the calculation.
+///
+/// # Examples
+///
+/// ```
+/// use orlando_transducers::{mean, transducer::Identity};
+///
+/// let id = Identity::new();
+/// let result = mean(&id, vec![1.0, 2.0, 3.0, 4.0, 5.0]);
+/// assert_eq!(result, Some(3.0));
+/// ```
+///
+/// ```
+/// use orlando_transducers::{mean, transforms::Map};
+///
+/// let double = Map::new(|x: i32| x * 2);
+/// let result = mean(&double, vec![1, 2, 3, 4, 5]);
+/// assert_eq!(result, Some(6.0)); // Mean of [2, 4, 6, 8, 10]
+/// ```
+pub fn mean<T, U, Iter>(transducer: &impl Transducer<T, U>, source: Iter) -> Option<f64>
+where
+    T: 'static,
+    U: Into<f64> + 'static,
+    Iter: IntoIterator<Item = T>,
+{
+    let elements = to_vec(transducer, source);
+    if elements.is_empty() {
+        None
+    } else {
+        let len = elements.len();
+        let sum: f64 = elements.into_iter().map(|x| x.into()).sum();
+        Some(sum / (len as f64))
+    }
+}
+
+/// Find the median (middle value) of elements.
+///
+/// Returns `None` for empty sequences. For sequences with an even number of
+/// elements, returns the average of the two middle values.
+/// Requires sorting, O(n log n) complexity.
+///
+/// # Examples
+///
+/// ```
+/// use orlando_transducers::{median, transducer::Identity};
+///
+/// let id = Identity::new();
+/// let result = median(&id, vec![1.0, 2.0, 3.0, 4.0, 5.0]);
+/// assert_eq!(result, Some(3.0));
+/// ```
+///
+/// ```
+/// use orlando_transducers::{median, transducer::Identity};
+///
+/// // Even number of elements - returns average of middle two
+/// let id = Identity::new();
+/// let result = median(&id, vec![1.0, 2.0, 3.0, 4.0]);
+/// assert_eq!(result, Some(2.5));
+/// ```
+pub fn median<T, U, Iter>(transducer: &impl Transducer<T, U>, source: Iter) -> Option<f64>
+where
+    T: 'static,
+    U: Into<f64> + PartialOrd + 'static,
+    Iter: IntoIterator<Item = T>,
+{
+    let elements = to_vec(transducer, source);
+    if elements.is_empty() {
+        return None;
+    }
+
+    let mut values: Vec<f64> = elements.into_iter().map(|x| x.into()).collect();
+    values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+    let len = values.len();
+    if len % 2 == 1 {
+        Some(values[len / 2])
+    } else {
+        Some((values[len / 2 - 1] + values[len / 2]) / 2.0)
+    }
+}
+
+/// Find the minimum element.
+///
+/// Returns `None` for empty sequences, otherwise returns `Some(min)`.
+///
+/// # Examples
+///
+/// ```
+/// use orlando_transducers::{min, transducer::Identity};
+///
+/// let id = Identity::new();
+/// let result = min(&id, vec![3, 1, 4, 1, 5]);
+/// assert_eq!(result, Some(1));
+/// ```
+///
+/// ```
+/// use orlando_transducers::{min, transforms::Map};
+///
+/// let double = Map::new(|x: i32| x * 2);
+/// let result = min(&double, vec![3, 1, 4, 1, 5]);
+/// assert_eq!(result, Some(2)); // Min of [6, 2, 8, 2, 10]
+/// ```
+pub fn min<T, U, Iter>(transducer: &impl Transducer<T, U>, source: Iter) -> Option<U>
+where
+    T: 'static,
+    U: Ord + 'static,
+    Iter: IntoIterator<Item = T>,
+{
+    let elements = to_vec(transducer, source);
+    elements.into_iter().min()
+}
+
+/// Find the maximum element.
+///
+/// Returns `None` for empty sequences, otherwise returns `Some(max)`.
+///
+/// # Examples
+///
+/// ```
+/// use orlando_transducers::{max, transducer::Identity};
+///
+/// let id = Identity::new();
+/// let result = max(&id, vec![3, 1, 4, 1, 5]);
+/// assert_eq!(result, Some(5));
+/// ```
+///
+/// ```
+/// use orlando_transducers::{max, transforms::Map};
+///
+/// let double = Map::new(|x: i32| x * 2);
+/// let result = max(&double, vec![3, 1, 4, 1, 5]);
+/// assert_eq!(result, Some(10)); // Max of [6, 2, 8, 2, 10]
+/// ```
+pub fn max<T, U, Iter>(transducer: &impl Transducer<T, U>, source: Iter) -> Option<U>
+where
+    T: 'static,
+    U: Ord + 'static,
+    Iter: IntoIterator<Item = T>,
+{
+    let elements = to_vec(transducer, source);
+    elements.into_iter().max()
+}
+
+/// Find the minimum element by comparing a key extracted from each element.
+///
+/// Returns `None` for empty sequences, otherwise returns `Some(element)` with
+/// the minimum key value.
+///
+/// # Examples
+///
+/// ```
+/// use orlando_transducers::{min_by, transducer::Identity};
+///
+/// #[derive(Debug, PartialEq)]
+/// struct Product { name: &'static str, price: i32 }
+///
+/// let id = Identity::new();
+/// let products = vec![
+///     Product { name: "Apple", price: 100 },
+///     Product { name: "Banana", price: 50 },
+///     Product { name: "Cherry", price: 150 },
+/// ];
+///
+/// let cheapest = min_by(&id, products, |p| p.price);
+/// assert_eq!(cheapest.unwrap().name, "Banana");
+/// ```
+pub fn min_by<T, U, K, Iter, F>(
+    transducer: &impl Transducer<T, U>,
+    source: Iter,
+    key_fn: F,
+) -> Option<U>
+where
+    T: 'static,
+    U: 'static,
+    K: Ord,
+    Iter: IntoIterator<Item = T>,
+    F: Fn(&U) -> K,
+{
+    let elements = to_vec(transducer, source);
+    elements.into_iter().min_by_key(key_fn)
+}
+
+/// Find the maximum element by comparing a key extracted from each element.
+///
+/// Returns `None` for empty sequences, otherwise returns `Some(element)` with
+/// the maximum key value.
+///
+/// # Examples
+///
+/// ```
+/// use orlando_transducers::{max_by, transducer::Identity};
+///
+/// #[derive(Debug, PartialEq)]
+/// struct Product { name: &'static str, price: i32 }
+///
+/// let id = Identity::new();
+/// let products = vec![
+///     Product { name: "Apple", price: 100 },
+///     Product { name: "Banana", price: 50 },
+///     Product { name: "Cherry", price: 150 },
+/// ];
+///
+/// let most_expensive = max_by(&id, products, |p| p.price);
+/// assert_eq!(most_expensive.unwrap().name, "Cherry");
+/// ```
+pub fn max_by<T, U, K, Iter, F>(
+    transducer: &impl Transducer<T, U>,
+    source: Iter,
+    key_fn: F,
+) -> Option<U>
+where
+    T: 'static,
+    U: 'static,
+    K: Ord,
+    Iter: IntoIterator<Item = T>,
+    F: Fn(&U) -> K,
+{
+    let elements = to_vec(transducer, source);
+    elements.into_iter().max_by_key(key_fn)
+}
+
+/// Calculate the variance of elements.
+///
+/// Returns `None` for empty sequences or sequences with only one element,
+/// otherwise returns `Some(variance)`.
+/// Uses the sample variance formula (dividing by n-1).
+///
+/// # Examples
+///
+/// ```
+/// use orlando_transducers::{variance, transducer::Identity};
+///
+/// let id = Identity::new();
+/// let result = variance(&id, vec![2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0]);
+/// // Variance is approximately 4.571
+/// assert!((result.unwrap() - 4.571).abs() < 0.01);
+/// ```
+pub fn variance<T, U, Iter>(transducer: &impl Transducer<T, U>, source: Iter) -> Option<f64>
+where
+    T: 'static,
+    U: Into<f64> + Clone + 'static,
+    Iter: IntoIterator<Item = T>,
+{
+    let elements = to_vec(transducer, source);
+    if elements.len() < 2 {
+        return None;
+    }
+
+    let values: Vec<f64> = elements.into_iter().map(|x| x.into()).collect();
+    let n = values.len() as f64;
+    let mean_val = values.iter().sum::<f64>() / n;
+
+    let sum_squared_diff: f64 = values
+        .iter()
+        .map(|x| {
+            let diff = x - mean_val;
+            diff * diff
+        })
+        .sum();
+
+    Some(sum_squared_diff / (n - 1.0))
+}
+
+/// Calculate the standard deviation of elements.
+///
+/// Returns `None` for empty sequences or sequences with only one element,
+/// otherwise returns `Some(std_dev)`.
+/// Standard deviation is the square root of variance.
+///
+/// # Examples
+///
+/// ```
+/// use orlando_transducers::{std_dev, transducer::Identity};
+///
+/// let id = Identity::new();
+/// let result = std_dev(&id, vec![2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0]);
+/// // Std dev is approximately 2.138
+/// assert!((result.unwrap() - 2.138).abs() < 0.01);
+/// ```
+pub fn std_dev<T, U, Iter>(transducer: &impl Transducer<T, U>, source: Iter) -> Option<f64>
+where
+    T: 'static,
+    U: Into<f64> + Clone + 'static,
+    Iter: IntoIterator<Item = T>,
+{
+    variance(transducer, source).map(|v| v.sqrt())
+}
+
+/// Calculate a quantile (percentile) value.
+///
+/// `p` should be between 0.0 and 1.0, where 0.0 is the minimum,
+/// 0.5 is the median, and 1.0 is the maximum.
+/// Returns `None` for empty sequences or invalid `p` values.
+/// Uses linear interpolation between closest ranks.
+///
+/// # Examples
+///
+/// ```
+/// use orlando_transducers::{quantile, transducer::Identity};
+///
+/// let id = Identity::new();
+/// // Median (50th percentile)
+/// let result = quantile(&id, vec![1.0, 2.0, 3.0, 4.0, 5.0], 0.5);
+/// assert_eq!(result, Some(3.0));
+/// ```
+///
+/// ```
+/// use orlando_transducers::{quantile, transducer::Identity};
+///
+/// let id = Identity::new();
+/// // 95th percentile
+/// let result = quantile(&id, vec![1.0, 2.0, 3.0, 4.0, 5.0], 0.95);
+/// assert_eq!(result, Some(4.8));
+/// ```
+pub fn quantile<T, U, Iter>(transducer: &impl Transducer<T, U>, source: Iter, p: f64) -> Option<f64>
+where
+    T: 'static,
+    U: Into<f64> + PartialOrd + 'static,
+    Iter: IntoIterator<Item = T>,
+{
+    if !(0.0..=1.0).contains(&p) {
+        return None;
+    }
+
+    let elements = to_vec(transducer, source);
+    if elements.is_empty() {
+        return None;
+    }
+
+    let mut values: Vec<f64> = elements.into_iter().map(|x| x.into()).collect();
+    values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+    let len = values.len();
+    if len == 1 {
+        return Some(values[0]);
+    }
+
+    // Linear interpolation
+    let index = p * (len - 1) as f64;
+    let lower = index.floor() as usize;
+    let upper = index.ceil() as usize;
+
+    if lower == upper {
+        Some(values[lower])
+    } else {
+        let weight = index - lower as f64;
+        Some(values[lower] * (1.0 - weight) + values[upper] * weight)
+    }
+}
+
+/// Find the mode (most frequent element).
+///
+/// Returns `None` for empty sequences, otherwise returns `Some(mode)`.
+/// If multiple elements have the same maximum frequency, returns any one of them.
+///
+/// # Examples
+///
+/// ```
+/// use orlando_transducers::{mode, transducer::Identity};
+///
+/// let id = Identity::new();
+/// let result = mode(&id, vec![1, 2, 2, 3, 3, 3, 4]);
+/// assert_eq!(result, Some(3));
+/// ```
+///
+/// ```
+/// use orlando_transducers::{mode, transforms::Map};
+///
+/// let mod_3 = Map::new(|x: i32| x % 3);
+/// let result = mode(&mod_3, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+/// // Most common mod 3 value is 0: [3, 6, 9]
+/// assert_eq!(result, Some(0));
+/// ```
+pub fn mode<T, U, Iter>(transducer: &impl Transducer<T, U>, source: Iter) -> Option<U>
+where
+    T: 'static,
+    U: Eq + Hash + Clone + 'static,
+    Iter: IntoIterator<Item = T>,
+{
+    let elements = to_vec(transducer, source);
+    if elements.is_empty() {
+        return None;
+    }
+
+    let mut freq_map: HashMap<U, usize> = HashMap::new();
+    for elem in elements {
+        *freq_map.entry(elem).or_insert(0) += 1;
+    }
+
+    freq_map
+        .into_iter()
+        .max_by_key(|(_, count)| *count)
+        .map(|(value, _)| value)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1896,5 +2329,429 @@ mod tests {
         assert_eq!(dropped.len() + taken.len(), 10);
         assert_eq!(dropped, vec![1, 2, 3, 4, 5, 6, 7]);
         assert_eq!(taken, vec![8, 9, 10]);
+    }
+
+    // ============================================================================
+    // Phase 4: Aggregation & Statistical Operations Tests
+    // ============================================================================
+
+    #[test]
+    fn test_product_basic() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = product(&id, vec![2, 3, 4]);
+        assert_eq!(result, 24);
+    }
+
+    #[test]
+    fn test_product_empty() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result: i32 = product(&id, Vec::<i32>::new());
+        assert_eq!(result, 1); // Multiplicative identity
+    }
+
+    #[test]
+    fn test_product_with_map() {
+        let double = Map::new(|x: i32| x * 2);
+        let result = product(&double, vec![1, 2, 3]);
+        assert_eq!(result, 48); // 2 * 4 * 6
+    }
+
+    #[test]
+    fn test_product_with_zero() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = product(&id, vec![1, 2, 0, 3, 4]);
+        assert_eq!(result, 0);
+    }
+
+    #[test]
+    fn test_mean_basic() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = mean(&id, vec![1.0, 2.0, 3.0, 4.0, 5.0]);
+        assert_eq!(result, Some(3.0));
+    }
+
+    #[test]
+    fn test_mean_empty() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = mean(&id, Vec::<f64>::new());
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_mean_integers() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = mean(&id, vec![1, 2, 3, 4, 5]);
+        assert_eq!(result, Some(3.0));
+    }
+
+    #[test]
+    fn test_mean_with_map() {
+        let double = Map::new(|x: i32| (x * 2) as f64);
+        let result = mean(&double, vec![1, 2, 3, 4, 5]);
+        assert_eq!(result, Some(6.0)); // Mean of [2, 4, 6, 8, 10]
+    }
+
+    #[test]
+    fn test_median_odd_count() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = median(&id, vec![1.0, 2.0, 3.0, 4.0, 5.0]);
+        assert_eq!(result, Some(3.0));
+    }
+
+    #[test]
+    fn test_median_even_count() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = median(&id, vec![1.0, 2.0, 3.0, 4.0]);
+        assert_eq!(result, Some(2.5));
+    }
+
+    #[test]
+    fn test_median_empty() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = median(&id, Vec::<f64>::new());
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_median_single() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = median(&id, vec![42.0]);
+        assert_eq!(result, Some(42.0));
+    }
+
+    #[test]
+    fn test_median_unsorted() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = median(&id, vec![5.0, 1.0, 3.0, 2.0, 4.0]);
+        assert_eq!(result, Some(3.0));
+    }
+
+    #[test]
+    fn test_min_basic() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = min(&id, vec![3, 1, 4, 1, 5]);
+        assert_eq!(result, Some(1));
+    }
+
+    #[test]
+    fn test_min_empty() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = min(&id, Vec::<i32>::new());
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_min_with_map() {
+        let double = Map::new(|x: i32| x * 2);
+        let result = min(&double, vec![3, 1, 4, 1, 5]);
+        assert_eq!(result, Some(2)); // Min of [6, 2, 8, 2, 10]
+    }
+
+    #[test]
+    fn test_max_basic() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = max(&id, vec![3, 1, 4, 1, 5]);
+        assert_eq!(result, Some(5));
+    }
+
+    #[test]
+    fn test_max_empty() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = max(&id, Vec::<i32>::new());
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_max_with_map() {
+        let double = Map::new(|x: i32| x * 2);
+        let result = max(&double, vec![3, 1, 4, 1, 5]);
+        assert_eq!(result, Some(10)); // Max of [6, 2, 8, 2, 10]
+    }
+
+    #[test]
+    fn test_min_by_basic() {
+        use crate::transducer::Identity;
+        #[derive(Debug, PartialEq, Clone)]
+        struct Product {
+            name: &'static str,
+            price: i32,
+        }
+
+        let id = Identity::new();
+        let products = vec![
+            Product {
+                name: "Apple",
+                price: 100,
+            },
+            Product {
+                name: "Banana",
+                price: 50,
+            },
+            Product {
+                name: "Cherry",
+                price: 150,
+            },
+        ];
+
+        let cheapest = min_by(&id, products, |p| p.price);
+        assert_eq!(cheapest.unwrap().name, "Banana");
+    }
+
+    #[test]
+    fn test_min_by_empty() {
+        use crate::transducer::Identity;
+        #[derive(Debug, PartialEq)]
+        struct Item {
+            value: i32,
+        }
+
+        let id = Identity::new();
+        let result = min_by(&id, Vec::<Item>::new(), |item| item.value);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_max_by_basic() {
+        use crate::transducer::Identity;
+        #[derive(Debug, PartialEq, Clone)]
+        struct Product {
+            name: &'static str,
+            price: i32,
+        }
+
+        let id = Identity::new();
+        let products = vec![
+            Product {
+                name: "Apple",
+                price: 100,
+            },
+            Product {
+                name: "Banana",
+                price: 50,
+            },
+            Product {
+                name: "Cherry",
+                price: 150,
+            },
+        ];
+
+        let most_expensive = max_by(&id, products, |p| p.price);
+        assert_eq!(most_expensive.unwrap().name, "Cherry");
+    }
+
+    #[test]
+    fn test_max_by_empty() {
+        use crate::transducer::Identity;
+        #[derive(Debug, PartialEq)]
+        struct Item {
+            value: i32,
+        }
+
+        let id = Identity::new();
+        let result = max_by(&id, Vec::<Item>::new(), |item| item.value);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_variance_basic() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = variance(&id, vec![2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0]);
+        // Variance is approximately 4.571
+        assert!((result.unwrap() - 4.571).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_variance_empty() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = variance(&id, Vec::<f64>::new());
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_variance_single_element() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = variance(&id, vec![42.0]);
+        assert_eq!(result, None); // Need at least 2 elements for sample variance
+    }
+
+    #[test]
+    fn test_variance_two_elements() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = variance(&id, vec![1.0, 3.0]);
+        // Variance of [1, 3] is 2.0
+        assert!((result.unwrap() - 2.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_std_dev_basic() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = std_dev(&id, vec![2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0]);
+        // Std dev is approximately 2.138
+        assert!((result.unwrap() - 2.138).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_std_dev_empty() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = std_dev(&id, Vec::<f64>::new());
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_std_dev_constant() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = std_dev(&id, vec![5.0, 5.0, 5.0, 5.0]);
+        // Std dev of constant values is 0
+        assert!((result.unwrap() - 0.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_quantile_median() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = quantile(&id, vec![1.0, 2.0, 3.0, 4.0, 5.0], 0.5);
+        assert_eq!(result, Some(3.0));
+    }
+
+    #[test]
+    fn test_quantile_min() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = quantile(&id, vec![1.0, 2.0, 3.0, 4.0, 5.0], 0.0);
+        assert_eq!(result, Some(1.0));
+    }
+
+    #[test]
+    fn test_quantile_max() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = quantile(&id, vec![1.0, 2.0, 3.0, 4.0, 5.0], 1.0);
+        assert_eq!(result, Some(5.0));
+    }
+
+    #[test]
+    fn test_quantile_p95() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = quantile(&id, vec![1.0, 2.0, 3.0, 4.0, 5.0], 0.95);
+        assert_eq!(result, Some(4.8));
+    }
+
+    #[test]
+    fn test_quantile_empty() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = quantile(&id, Vec::<f64>::new(), 0.5);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_quantile_invalid_p() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        assert_eq!(quantile(&id, vec![1.0, 2.0, 3.0], -0.1), None);
+        assert_eq!(quantile(&id, vec![1.0, 2.0, 3.0], 1.5), None);
+    }
+
+    #[test]
+    fn test_quantile_single_element() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = quantile(&id, vec![42.0], 0.5);
+        assert_eq!(result, Some(42.0));
+    }
+
+    #[test]
+    fn test_mode_basic() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = mode(&id, vec![1, 2, 2, 3, 3, 3, 4]);
+        assert_eq!(result, Some(3));
+    }
+
+    #[test]
+    fn test_mode_empty() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = mode(&id, Vec::<i32>::new());
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_mode_all_unique() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = mode(&id, vec![1, 2, 3, 4, 5]);
+        // All have frequency 1, should return one of them
+        assert!(result.is_some());
+        assert!([1, 2, 3, 4, 5].contains(&result.unwrap()));
+    }
+
+    #[test]
+    fn test_mode_with_map() {
+        let mod_3 = Map::new(|x: i32| x % 3);
+        // Use data where 0 clearly appears most frequently
+        let result = mode(&mod_3, vec![3, 6, 9, 12, 1, 2]);
+        // 0 appears 4 times (3, 6, 9, 12), while 1 and 2 appear once each
+        assert_eq!(result, Some(0));
+    }
+
+    #[test]
+    fn test_mode_strings() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = mode(&id, vec!["a", "b", "a", "c", "a", "b"]);
+        assert_eq!(result, Some("a"));
+    }
+
+    // Integration tests - combining Phase 4 operations
+
+    #[test]
+    fn test_statistical_operations_pipeline() {
+        // Test that Phase 4 operations work well with transducers
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+        assert_eq!(mean(&id, data.clone()), Some(5.5));
+        assert_eq!(median(&id, data.clone()), Some(5.5));
+        assert_eq!(min(&id, data.clone()), Some(1));
+        assert_eq!(max(&id, data.clone()), Some(10));
+    }
+
+    #[test]
+    fn test_phase4_with_filter() {
+        // Filter even numbers, then compute statistics
+        let pipeline = Filter::new(|x: &i32| x % 2 == 0);
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+        assert_eq!(count(&pipeline, data.clone()), 5);
+        assert_eq!(sum(&pipeline, data.clone()), 30); // 2+4+6+8+10
+        assert_eq!(product(&pipeline, data.clone()), 3840); // 2*4*6*8*10
+        assert_eq!(mean(&pipeline, data.clone()), Some(6.0));
+        assert_eq!(min(&pipeline, data.clone()), Some(2));
+        assert_eq!(max(&pipeline, data.clone()), Some(10));
     }
 }
