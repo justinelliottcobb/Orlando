@@ -123,3 +123,12 @@ jobs:
           targets: wasm32-unknown-unknown
       - run: cargo clippy --all-targets --all-features --target x86_64-unknown-linux-gnu -- -D warnings
       - run: cargo clippy --lib --target wasm32-unknown-unknown -- -D warnings
+
+  doctest:
+    name: Documentation Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run doctests
+        run: cargo test --doc --target x86_64-unknown-linux-gnu
