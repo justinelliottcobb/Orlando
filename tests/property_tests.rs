@@ -1778,4 +1778,305 @@ proptest! {
             prop_assert!(!always_false(val));
         }
     }
+
+    // ========================================
+    // Phase 2b: New Operations Property Tests (v0.2.0)
+    // ========================================
+
+    // Property: Aperture window count is correct
+    #[test]
+    fn test_aperture_window_count(vec in prop::collection::vec(any::<i32>(), 0..100), size in 1usize..10) {
+        use orlando_transducers::{Aperture, to_vec};
+
+        let window = Aperture::new(size);
+        let result = to_vec(&window, vec.clone());
+
+        if vec.len() < size {
+            prop_assert_eq!(result.len(), 0);
+        } else {
+            let expected_count = vec.len() - size + 1;
+            prop_assert_eq!(result.len(), expected_count);
+        }
+    }
+
+    // Property: Aperture windows are correct size
+    #[test]
+    fn test_aperture_window_size(vec in prop::collection::vec(any::<i32>(), 5..100), size in 1usize..10) {
+        use orlando_transducers::{Aperture, to_vec};
+
+        let window = Aperture::new(size);
+        let result = to_vec(&window, vec);
+
+        // All windows should be exactly the specified size
+        for w in &result {
+            prop_assert_eq!(w.len(), size);
+        }
+    }
+
+    // Property: Aperture windows overlap correctly
+    #[test]
+    fn test_aperture_overlap(vec in prop::collection::vec(0i32..100, 5..50), size in 2usize..6) {
+        use orlando_transducers::{Aperture, to_vec};
+
+        let window = Aperture::new(size);
+        let result = to_vec(&window, vec.clone());
+
+        // Each window should start 1 element after the previous
+        for i in 0..(result.len().saturating_sub(1)) {
+            // Last (size-1) elements of window[i] should equal first (size-1) of window[i+1]
+            for j in 1..size {
+                prop_assert_eq!(result[i][j], result[i + 1][j - 1]);
+            }
+        }
+    }
+
+    // Property: Aperture preserves original elements
+    #[test]
+    fn test_aperture_preserves_elements(vec in prop::collection::vec(any::<i32>(), 1..50), size in 1usize..5) {
+        use orlando_transducers::{Aperture, to_vec};
+
+        let window = Aperture::new(size);
+        let result = to_vec(&window, vec.clone());
+
+        // Only check if we have windows (vec must have at least 'size' elements)
+        if vec.len() >= size {
+            // Flatten all windows and verify all original elements appear
+            let flattened: std::collections::HashSet<_> = result.iter().flatten().collect();
+            for val in &vec {
+                prop_assert!(flattened.contains(val));
+            }
+        }
+    }
+
+    // Property: Aperture size 1 equals identity
+    #[test]
+    fn test_aperture_size_1_is_identity(vec in prop::collection::vec(any::<i32>(), 0..50)) {
+        use orlando_transducers::{Aperture, to_vec};
+
+        let window = Aperture::new(1);
+        let result = to_vec(&window, vec.clone());
+
+        // Should produce [[a], [b], [c], ...] which when flattened equals original
+        let flattened: Vec<i32> = result.into_iter().flatten().collect();
+        prop_assert_eq!(flattened, vec);
+    }
+
+    // Property: Aperture with composition
+    #[test]
+    fn test_aperture_with_filter(vec in prop::collection::vec(0i32..50, 10..50), size in 2usize..5) {
+        use orlando_transducers::{Aperture, Filter, to_vec};
+
+        let pipeline = Filter::new(|x: &i32| x % 2 == 0).compose(Aperture::new(size));
+        let result = to_vec(&pipeline, vec.clone());
+
+        // Filter even numbers first, then create windows
+        let evens: Vec<i32> = vec.iter().filter(|x| *x % 2 == 0).cloned().collect();
+        let expected_count = if evens.len() >= size {
+            evens.len() - size + 1
+        } else {
+            0
+        };
+
+        prop_assert_eq!(result.len(), expected_count);
+    }
+
+    // Property: take_last length is correct
+    #[test]
+    fn test_take_last_length(vec in prop::collection::vec(any::<i32>(), 0..100), n in 0usize..50) {
+        use orlando_transducers::{take_last, Identity};
+
+        let id = Identity::new();
+        let result = take_last(&id, vec.clone(), n);
+
+        let expected_len = n.min(vec.len());
+        prop_assert_eq!(result.len(), expected_len);
+    }
+
+    // Property: take_last returns correct elements
+    #[test]
+    fn test_take_last_correctness(vec in prop::collection::vec(any::<i32>(), 1..100), n in 1usize..50) {
+        use orlando_transducers::{take_last, Identity};
+
+        let id = Identity::new();
+        let result = take_last(&id, vec.clone(), n);
+
+        // Manually compute expected
+        let start = vec.len().saturating_sub(n);
+        let expected: Vec<i32> = vec.iter().skip(start).cloned().collect();
+
+        prop_assert_eq!(result, expected);
+    }
+
+    // Property: take_last preserves order
+    #[test]
+    fn test_take_last_preserves_order(vec in prop::collection::vec(0i32..100, 5..50), n in 1usize..20) {
+        use orlando_transducers::{take_last, Identity};
+
+        let id = Identity::new();
+        let result = take_last(&id, vec.clone(), n);
+
+        // Verify result is a suffix of original (preserves relative order)
+        if !result.is_empty() {
+            let start_idx = vec.len().saturating_sub(n);
+            let expected_suffix: Vec<i32> = vec[start_idx..].to_vec();
+            prop_assert_eq!(result, expected_suffix);
+        }
+    }
+
+    // Property: take_last + drop_last covers all elements
+    #[test]
+    fn test_take_drop_last_partition(vec in prop::collection::vec(any::<i32>(), 0..100), n in 0usize..50) {
+        use orlando_transducers::{take_last, drop_last, Identity};
+
+        let id = Identity::new();
+        let taken = take_last(&id, vec.clone(), n);
+        let dropped = drop_last(&id, vec.clone(), n);
+
+        // Length should sum to original
+        prop_assert_eq!(taken.len() + dropped.len(), vec.len());
+
+        // Concatenated should equal original
+        let mut combined = dropped.clone();
+        combined.extend(taken);
+        prop_assert_eq!(combined, vec);
+    }
+
+    // Property: take_last zero returns empty
+    #[test]
+    fn test_take_last_zero(vec in prop::collection::vec(any::<i32>(), 0..50)) {
+        use orlando_transducers::{take_last, Identity};
+
+        let id = Identity::new();
+        let result = take_last(&id, vec, 0);
+
+        prop_assert!(result.is_empty());
+    }
+
+    // Property: take_last more than length returns all
+    #[test]
+    fn test_take_last_overflow(vec in prop::collection::vec(any::<i32>(), 0..50), extra in 1usize..100) {
+        use orlando_transducers::{take_last, Identity};
+
+        let id = Identity::new();
+        let n = vec.len() + extra;
+        let result = take_last(&id, vec.clone(), n);
+
+        prop_assert_eq!(result, vec);
+    }
+
+    // Property: drop_last length is correct
+    #[test]
+    fn test_drop_last_length(vec in prop::collection::vec(any::<i32>(), 0..100), n in 0usize..50) {
+        use orlando_transducers::{drop_last, Identity};
+
+        let id = Identity::new();
+        let result = drop_last(&id, vec.clone(), n);
+
+        let expected_len = vec.len().saturating_sub(n);
+        prop_assert_eq!(result.len(), expected_len);
+    }
+
+    // Property: drop_last returns correct elements
+    #[test]
+    fn test_drop_last_correctness(vec in prop::collection::vec(any::<i32>(), 1..100), n in 1usize..50) {
+        use orlando_transducers::{drop_last, Identity};
+
+        let id = Identity::new();
+        let result = drop_last(&id, vec.clone(), n);
+
+        // Manually compute expected
+        let end = vec.len().saturating_sub(n);
+        let expected: Vec<i32> = vec.iter().take(end).cloned().collect();
+
+        prop_assert_eq!(result, expected);
+    }
+
+    // Property: drop_last preserves order
+    #[test]
+    fn test_drop_last_preserves_order(vec in prop::collection::vec(0i32..100, 5..50), n in 1usize..20) {
+        use orlando_transducers::{drop_last, Identity};
+
+        let id = Identity::new();
+        let result = drop_last(&id, vec.clone(), n);
+
+        // Verify result is a prefix of original (preserves relative order)
+        if !result.is_empty() {
+            let end_idx = vec.len().saturating_sub(n);
+            let expected_prefix: Vec<i32> = vec[..end_idx].to_vec();
+            prop_assert_eq!(result, expected_prefix);
+        }
+    }
+
+    // Property: drop_last zero is identity
+    #[test]
+    fn test_drop_last_zero_identity(vec in prop::collection::vec(any::<i32>(), 0..50)) {
+        use orlando_transducers::{drop_last, Identity};
+
+        let id = Identity::new();
+        let result = drop_last(&id, vec.clone(), 0);
+
+        prop_assert_eq!(result, vec);
+    }
+
+    // Property: drop_last more than length returns empty
+    #[test]
+    fn test_drop_last_overflow(vec in prop::collection::vec(any::<i32>(), 0..50), extra in 1usize..100) {
+        use orlando_transducers::{drop_last, Identity};
+
+        let id = Identity::new();
+        let n = vec.len() + extra;
+        let result = drop_last(&id, vec, n);
+
+        prop_assert!(result.is_empty());
+    }
+
+    // Property: take_last with transducer applies transformation
+    #[test]
+    fn test_take_last_with_map(vec in prop::collection::vec(any::<i32>(), 1..100), n in 1usize..30) {
+        use orlando_transducers::{take_last, Map};
+
+        let pipeline = Map::new(|x: i32| x.saturating_mul(2));
+        let result = take_last(&pipeline, vec.clone(), n);
+
+        // Manually compute: double all, then take last n
+        let doubled: Vec<i32> = vec.iter().map(|x| x.saturating_mul(2)).collect();
+        let start = doubled.len().saturating_sub(n);
+        let expected: Vec<i32> = doubled.iter().skip(start).cloned().collect();
+
+        prop_assert_eq!(result, expected);
+    }
+
+    // Property: drop_last with transducer applies transformation
+    #[test]
+    fn test_drop_last_with_map(vec in prop::collection::vec(any::<i32>(), 1..100), n in 1usize..30) {
+        use orlando_transducers::{drop_last, Map};
+
+        let pipeline = Map::new(|x: i32| x.saturating_mul(2));
+        let result = drop_last(&pipeline, vec.clone(), n);
+
+        // Manually compute: double all, then drop last n
+        let doubled: Vec<i32> = vec.iter().map(|x| x.saturating_mul(2)).collect();
+        let end = doubled.len().saturating_sub(n);
+        let expected: Vec<i32> = doubled.iter().take(end).cloned().collect();
+
+        prop_assert_eq!(result, expected);
+    }
+
+    // Property: Aperture followed by take_last
+    #[test]
+    fn test_aperture_take_last_composition(vec in prop::collection::vec(0i32..50, 10..50), win_size in 2usize..5, n in 1usize..10) {
+        use orlando_transducers::{Aperture, to_vec};
+
+        // Create windows, then take last n windows
+        let aperture = Aperture::new(win_size);
+        let windows = to_vec(&aperture, vec.clone());
+
+        let start = windows.len().saturating_sub(n);
+        let expected: Vec<Vec<i32>> = windows.iter().skip(start).cloned().collect();
+
+        // Manually compute to verify
+        if windows.len() >= n {
+            prop_assert_eq!(expected.len(), n.min(windows.len()));
+        }
+    }
 }

@@ -1169,4 +1169,87 @@ mod tests {
     fn test_aperture_zero_size() {
         let _window = Aperture::<i32>::new(0);
     }
+
+    #[test]
+    fn test_aperture_size_1() {
+        use crate::collectors::to_vec;
+
+        // Window size 1 should return each element individually
+        let window = Aperture::new(1);
+        let result = to_vec(&window, vec![1, 2, 3]);
+        assert_eq!(result, vec![vec![1], vec![2], vec![3]]);
+    }
+
+    #[test]
+    fn test_aperture_empty() {
+        use crate::collectors::to_vec;
+
+        let window = Aperture::new(3);
+        let result = to_vec(&window, Vec::<i32>::new());
+        assert_eq!(result, Vec::<Vec<i32>>::new());
+    }
+
+    #[test]
+    fn test_aperture_large_window() {
+        use crate::collectors::to_vec;
+
+        // Window size larger than array
+        let window = Aperture::new(10);
+        let result = to_vec(&window, vec![1, 2, 3]);
+        assert_eq!(result, Vec::<Vec<i32>>::new());
+    }
+
+    #[test]
+    fn test_aperture_with_filter() {
+        use crate::collectors::to_vec;
+
+        // Aperture on filtered data
+        let pipeline = Filter::new(|x: &i32| x % 2 == 0).compose(Aperture::new(2));
+        let result = to_vec(&pipeline, vec![1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(result, vec![vec![2, 4], vec![4, 6], vec![6, 8]]);
+    }
+
+    #[test]
+    fn test_aperture_early_termination() {
+        use crate::collectors::to_vec;
+
+        // Aperture followed by take should terminate early
+        let pipeline = Aperture::new(2).compose(Take::new(2));
+        let result = to_vec(&pipeline, vec![1, 2, 3, 4, 5]);
+        assert_eq!(result, vec![vec![1, 2], vec![2, 3]]);
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_aperture_single_element() {
+        use crate::collectors::to_vec;
+
+        // Single element with window size 1
+        let window = Aperture::new(1);
+        let result = to_vec(&window, vec![42]);
+        assert_eq!(result, vec![vec![42]]);
+    }
+
+    #[test]
+    fn test_aperture_strings() {
+        use crate::collectors::to_vec;
+
+        // Test with non-numeric types
+        let window = Aperture::new(2);
+        let result = to_vec(&window, vec!["a", "b", "c", "d"]);
+        assert_eq!(result, vec![vec!["a", "b"], vec!["b", "c"], vec!["c", "d"]]);
+    }
+
+    #[test]
+    fn test_aperture_large_data() {
+        use crate::collectors::to_vec;
+
+        // Test with larger dataset
+        let data: Vec<i32> = (1..=100).collect();
+        let window = Aperture::new(5);
+        let result = to_vec(&window, data);
+        assert_eq!(result.len(), 96); // 100 - 5 + 1
+        assert_eq!(result[0], vec![1, 2, 3, 4, 5]);
+        assert_eq!(result[95], vec![96, 97, 98, 99, 100]);
+    }
 }
