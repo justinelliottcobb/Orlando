@@ -102,14 +102,18 @@ jobs:
       - name: Build WASM package (release)
         run: wasm-pack build --release --target bundler --out-dir pkg
 
-      - name: Add copyright to package.json
+      - name: Fix package.json metadata
         run: |
           cd pkg
-          # Add copyright field using Node.js
+          # Add copyright and fix repository URL using Node.js
           node -e "
             const fs = require('fs');
             const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
             pkg.copyright = 'Copyright (c) 2025 Justin Elliott Cobb';
+            // Fix repository URL format (npm expects git+ prefix)
+            if (pkg.repository && pkg.repository.url) {
+              pkg.repository.url = pkg.repository.url.replace(/^https:\/\//, 'git+https://');
+            }
             fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
           "
 
