@@ -713,3 +713,111 @@ pub fn symmetric_difference(array_a: &Array, array_b: &Array) -> Array {
 
     result
 }
+
+// ============================================================================
+// Phase 2b: Additional Operations
+// ============================================================================
+
+/// Take the last N elements from an array.
+///
+/// This operation processes the entire array and returns only the last N elements.
+/// Unlike `take()`, which stops early, this requires buffering the full result.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { takeLast } from 'orlando-transducers';
+///
+/// const data = [1, 2, 3, 4, 5];
+/// const result = takeLast(data, 3);
+/// // result: [3, 4, 5]
+/// ```
+#[wasm_bindgen(js_name = takeLast)]
+pub fn take_last(source: &Array, n: u32) -> Array {
+    let len = source.length();
+
+    let result = Array::new();
+
+    if n >= len {
+        // Return all elements if n is greater than or equal to array length
+        for i in 0..len {
+            result.push(&source.get(i));
+        }
+    } else {
+        // Return last n elements
+        let start = len - n;
+        for i in start..len {
+            result.push(&source.get(i));
+        }
+    }
+
+    result
+}
+
+/// Drop the last N elements from an array.
+///
+/// This operation processes the entire array and returns all elements except the last N.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { dropLast } from 'orlando-transducers';
+///
+/// const data = [1, 2, 3, 4, 5];
+/// const result = dropLast(data, 2);
+/// // result: [1, 2, 3]
+/// ```
+#[wasm_bindgen(js_name = dropLast)]
+pub fn drop_last(source: &Array, n: u32) -> Array {
+    let len = source.length();
+
+    let result = Array::new();
+
+    if n >= len {
+        // Return empty array if n is greater than or equal to array length
+        return result;
+    }
+
+    // Return all but last n elements
+    let end = len - n;
+    for i in 0..end {
+        result.push(&source.get(i));
+    }
+
+    result
+}
+
+/// Create sliding windows of size N over an array.
+///
+/// Returns an array of arrays, where each sub-array is a window of N consecutive elements.
+/// Windows overlap - each window slides by one element.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { aperture } from 'orlando-transducers';
+///
+/// const data = [1, 2, 3, 4, 5];
+/// const result = aperture(data, 3);
+/// // result: [[1, 2, 3], [2, 3, 4], [3, 4, 5]]
+/// ```
+#[wasm_bindgen]
+pub fn aperture(source: &Array, size: u32) -> Array {
+    let len = source.length();
+    let result = Array::new();
+
+    if size == 0 || size > len {
+        return result;
+    }
+
+    // Create sliding windows
+    for i in 0..=(len - size) {
+        let window = Array::new();
+        for j in 0..size {
+            window.push(&source.get(i + j));
+        }
+        result.push(&window);
+    }
+
+    result
+}

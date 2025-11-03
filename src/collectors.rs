@@ -1111,6 +1111,104 @@ where
     result
 }
 
+/// Take the last N elements from a stream.
+///
+/// This operation requires buffering the entire stream since it needs to know
+/// which elements are the "last" ones. It uses a circular buffer for efficiency.
+///
+/// # Examples
+///
+/// ```
+/// use orlando_transducers::{take_last, transducer::Identity};
+///
+/// let id = Identity::new();
+/// let result = take_last(&id, vec![1, 2, 3, 4, 5], 3);
+/// assert_eq!(result, vec![3, 4, 5]);
+/// ```
+///
+/// ```
+/// use orlando_transducers::{take_last, Map};
+///
+/// // Take last 2 after doubling
+/// let pipeline = Map::new(|x: i32| x * 2);
+/// let result = take_last(&pipeline, vec![1, 2, 3, 4, 5], 2);
+/// assert_eq!(result, vec![8, 10]); // Last 2 after doubling
+/// ```
+///
+/// ```
+/// use orlando_transducers::{take_last, transducer::Identity};
+///
+/// // Requesting more than available returns all elements
+/// let id = Identity::new();
+/// let result = take_last(&id, vec![1, 2, 3], 10);
+/// assert_eq!(result, vec![1, 2, 3]);
+/// ```
+pub fn take_last<T, U, Iter>(transducer: &impl Transducer<T, U>, source: Iter, n: usize) -> Vec<U>
+where
+    T: 'static,
+    U: Clone + 'static,
+    Iter: IntoIterator<Item = T>,
+{
+    // Collect all elements first
+    let all_elements = to_vec(transducer, source);
+
+    // Take the last n elements
+    if all_elements.len() <= n {
+        all_elements
+    } else {
+        all_elements[all_elements.len() - n..].to_vec()
+    }
+}
+
+/// Drop the last N elements from a stream.
+///
+/// This operation requires buffering the entire stream since it needs to know
+/// which elements are the "last" ones to drop.
+///
+/// # Examples
+///
+/// ```
+/// use orlando_transducers::{drop_last, transducer::Identity};
+///
+/// let id = Identity::new();
+/// let result = drop_last(&id, vec![1, 2, 3, 4, 5], 2);
+/// assert_eq!(result, vec![1, 2, 3]);
+/// ```
+///
+/// ```
+/// use orlando_transducers::{drop_last, Map};
+///
+/// // Drop last 2 after doubling
+/// let pipeline = Map::new(|x: i32| x * 2);
+/// let result = drop_last(&pipeline, vec![1, 2, 3, 4, 5], 2);
+/// assert_eq!(result, vec![2, 4, 6]); // [2, 4, 6, 8, 10] with last 2 dropped
+/// ```
+///
+/// ```
+/// use orlando_transducers::{drop_last, transducer::Identity};
+///
+/// // Dropping more than available returns empty vector
+/// let id = Identity::new();
+/// let result = drop_last(&id, vec![1, 2, 3], 10);
+/// assert_eq!(result, Vec::<i32>::new());
+/// ```
+pub fn drop_last<T, U, Iter>(transducer: &impl Transducer<T, U>, source: Iter, n: usize) -> Vec<U>
+where
+    T: 'static,
+    U: Clone + 'static,
+    Iter: IntoIterator<Item = T>,
+{
+    // Collect all elements first
+    let all_elements = to_vec(transducer, source);
+
+    // Drop the last n elements
+    if n >= all_elements.len() {
+        Vec::new()
+    } else {
+        all_elements[..all_elements.len() - n].to_vec()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1568,5 +1666,235 @@ mod tests {
         let b = vec![3, 4, 4];
         let result = symmetric_difference(a, b);
         assert_eq!(result, vec![1, 2, 4]);
+    }
+
+    // Phase 2b: New operations tests
+
+    #[test]
+    fn test_take_last_basic() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = take_last(&id, vec![1, 2, 3, 4, 5], 3);
+        assert_eq!(result, vec![3, 4, 5]);
+    }
+
+    #[test]
+    fn test_take_last_more_than_available() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = take_last(&id, vec![1, 2, 3], 10);
+        assert_eq!(result, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_take_last_zero() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = take_last(&id, vec![1, 2, 3, 4, 5], 0);
+        assert_eq!(result, Vec::<i32>::new());
+    }
+
+    #[test]
+    fn test_take_last_with_transducer() {
+        let pipeline = Map::new(|x: i32| x * 2);
+        let result = take_last(&pipeline, vec![1, 2, 3, 4, 5], 2);
+        assert_eq!(result, vec![8, 10]); // Last 2 after doubling
+    }
+
+    #[test]
+    fn test_drop_last_basic() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = drop_last(&id, vec![1, 2, 3, 4, 5], 2);
+        assert_eq!(result, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_drop_last_more_than_available() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = drop_last(&id, vec![1, 2, 3], 10);
+        assert_eq!(result, Vec::<i32>::new());
+    }
+
+    #[test]
+    fn test_drop_last_zero() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = drop_last(&id, vec![1, 2, 3, 4, 5], 0);
+        assert_eq!(result, vec![1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn test_drop_last_with_transducer() {
+        let pipeline = Map::new(|x: i32| x * 2);
+        let result = drop_last(&pipeline, vec![1, 2, 3, 4, 5], 2);
+        assert_eq!(result, vec![2, 4, 6]); // [2, 4, 6, 8, 10] with last 2 dropped
+    }
+
+    #[test]
+    fn test_take_last_empty() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = take_last(&id, Vec::<i32>::new(), 5);
+        assert_eq!(result, Vec::<i32>::new());
+    }
+
+    #[test]
+    fn test_drop_last_empty() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = drop_last(&id, Vec::<i32>::new(), 5);
+        assert_eq!(result, Vec::<i32>::new());
+    }
+
+    // Additional comprehensive tests for take_last
+
+    #[test]
+    fn test_take_last_one() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = take_last(&id, vec![1, 2, 3, 4, 5], 1);
+        assert_eq!(result, vec![5]);
+    }
+
+    #[test]
+    fn test_take_last_all() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = take_last(&id, vec![1, 2, 3], 3);
+        assert_eq!(result, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_take_last_single_element() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = take_last(&id, vec![42], 1);
+        assert_eq!(result, vec![42]);
+    }
+
+    #[test]
+    fn test_take_last_with_filter() {
+        let pipeline = Filter::new(|x: &i32| x % 2 == 0);
+        let result = take_last(&pipeline, vec![1, 2, 3, 4, 5, 6, 7, 8], 2);
+        assert_eq!(result, vec![6, 8]); // Last 2 evens
+    }
+
+    #[test]
+    fn test_take_last_strings() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = take_last(&id, vec!["a", "b", "c", "d"], 2);
+        assert_eq!(result, vec!["c", "d"]);
+    }
+
+    #[test]
+    fn test_take_last_large_data() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let data: Vec<i32> = (1..=1000).collect();
+        let result = take_last(&id, data, 10);
+        assert_eq!(
+            result,
+            vec![991, 992, 993, 994, 995, 996, 997, 998, 999, 1000]
+        );
+    }
+
+    #[test]
+    fn test_take_last_composed_operations() {
+        // Map then take last
+        let pipeline = Map::new(|x: i32| x * x);
+        let result = take_last(&pipeline, vec![1, 2, 3, 4, 5], 3);
+        assert_eq!(result, vec![9, 16, 25]);
+    }
+
+    // Additional comprehensive tests for drop_last
+
+    #[test]
+    fn test_drop_last_one() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = drop_last(&id, vec![1, 2, 3, 4, 5], 1);
+        assert_eq!(result, vec![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn test_drop_last_all() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = drop_last(&id, vec![1, 2, 3], 3);
+        assert_eq!(result, Vec::<i32>::new());
+    }
+
+    #[test]
+    fn test_drop_last_single_element() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = drop_last(&id, vec![42], 1);
+        assert_eq!(result, Vec::<i32>::new());
+    }
+
+    #[test]
+    fn test_drop_last_with_filter() {
+        let pipeline = Filter::new(|x: &i32| x % 2 == 0);
+        let result = drop_last(&pipeline, vec![1, 2, 3, 4, 5, 6, 7, 8], 2);
+        assert_eq!(result, vec![2, 4]); // Evens [2,4,6,8], drop last 2 -> [2,4]
+    }
+
+    #[test]
+    fn test_drop_last_strings() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let result = drop_last(&id, vec!["a", "b", "c", "d"], 2);
+        assert_eq!(result, vec!["a", "b"]);
+    }
+
+    #[test]
+    fn test_drop_last_large_data() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let data: Vec<i32> = (1..=1000).collect();
+        let result = drop_last(&id, data, 10);
+        assert_eq!(result.len(), 990);
+        assert_eq!(result[0], 1);
+        assert_eq!(result[989], 990);
+    }
+
+    #[test]
+    fn test_drop_last_composed_operations() {
+        // Map then drop last
+        let pipeline = Map::new(|x: i32| x * x);
+        let result = drop_last(&pipeline, vec![1, 2, 3, 4, 5], 2);
+        assert_eq!(result, vec![1, 4, 9]); // [1,4,9,16,25] drop last 2
+    }
+
+    // Combined tests - take_last and drop_last interaction
+
+    #[test]
+    fn test_take_last_drop_last_equivalence() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+        // take_last 3 should equal dropping first 7
+        let taken = take_last(&id, data.clone(), 3);
+        let remaining_after_drop_first: Vec<i32> = data.iter().skip(7).cloned().collect();
+        assert_eq!(taken, remaining_after_drop_first);
+    }
+
+    #[test]
+    fn test_drop_last_take_last_coverage() {
+        use crate::transducer::Identity;
+        let id = Identity::new();
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+        // drop_last 3 + take_last 3 should cover all elements
+        let dropped = drop_last(&id, data.clone(), 3);
+        let taken = take_last(&id, data, 3);
+
+        assert_eq!(dropped.len() + taken.len(), 10);
+        assert_eq!(dropped, vec![1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(taken, vec![8, 9, 10]);
     }
 }

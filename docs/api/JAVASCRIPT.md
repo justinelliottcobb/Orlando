@@ -323,6 +323,331 @@ console.log(sum); // 20
 
 ---
 
+### Multi-Input Operations
+
+These standalone functions work with multiple arrays. They don't use the Pipeline API.
+
+#### `takeLast(array, n)`
+
+Takes the last N elements from an array.
+
+```typescript
+takeLast(source: Array<T>, n: number): Array<T>
+```
+
+**Example:**
+```javascript
+import { takeLast } from 'orlando-transducers';
+
+const result = takeLast([1, 2, 3, 4, 5], 3);
+// result: [3, 4, 5]
+```
+
+**Use cases:**
+- Get recent items (last N logs, events, etc.)
+- Tail of a sequence
+- "Show more" from end
+
+**Note:** Unlike `take()`, this requires processing the entire array since it needs to know which elements are last.
+
+---
+
+#### `dropLast(array, n)`
+
+Drops the last N elements from an array.
+
+```typescript
+dropLast(source: Array<T>, n: number): Array<T>
+```
+
+**Example:**
+```javascript
+import { dropLast } from 'orlando-transducers';
+
+const result = dropLast([1, 2, 3, 4, 5], 2);
+// result: [1, 2, 3]
+```
+
+**Use cases:**
+- Remove trailing elements
+- Trim recent history
+- Keep all except last N
+
+---
+
+#### `aperture(array, size)`
+
+Creates sliding windows of a given size.
+
+```typescript
+aperture(source: Array<T>, size: number): Array<Array<T>>
+```
+
+**Example:**
+```javascript
+import { aperture } from 'orlando-transducers';
+
+const data = [1, 2, 3, 4, 5];
+const windows = aperture(data, 3);
+// windows: [[1, 2, 3], [2, 3, 4], [3, 4, 5]]
+```
+
+**Use cases:**
+- Moving averages
+- N-gram analysis
+- Sliding window algorithms
+- Comparing adjacent elements
+
+**Example - Moving average:**
+```javascript
+const numbers = [10, 20, 30, 40, 50];
+const windows = aperture(numbers, 3);
+const averages = windows.map(w => w.reduce((a, b) => a + b) / w.length);
+// averages: [20, 30, 40]
+```
+
+---
+
+#### `merge(arrays)`
+
+Interleaves elements from multiple arrays in round-robin fashion.
+
+```typescript
+merge(arrays: Array<Array<T>>): Array<T>
+```
+
+**Example:**
+```javascript
+import { merge } from 'orlando-transducers';
+
+const a = [1, 2, 3];
+const b = [4, 5, 6];
+const result = merge([a, b]);
+// result: [1, 4, 2, 5, 3, 6]
+```
+
+**Use cases:**
+- Interleaving data streams
+- Round-robin scheduling
+- Combining event logs chronologically
+
+---
+
+#### `intersection(arrayA, arrayB)`
+
+Returns elements that appear in both arrays.
+
+```typescript
+intersection(a: Array<T>, b: Array<T>): Array<T>
+```
+
+**Example:**
+```javascript
+import { intersection } from 'orlando-transducers';
+
+const a = [1, 2, 3, 4];
+const b = [3, 4, 5, 6];
+const common = intersection(a, b);
+// common: [3, 4]
+```
+
+**Use cases:**
+- Finding common elements
+- Set operations
+- Filtering by membership
+
+---
+
+#### `difference(arrayA, arrayB)`
+
+Returns elements in A that are not in B.
+
+```typescript
+difference(a: Array<T>, b: Array<T>): Array<T>
+```
+
+**Example:**
+```javascript
+import { difference } from 'orlando-transducers';
+
+const a = [1, 2, 3, 4];
+const b = [3, 4, 5, 6];
+const uniqueToA = difference(a, b);
+// uniqueToA: [1, 2]
+```
+
+**Use cases:**
+- Finding new/removed items
+- Exclusion lists
+- Diff operations
+
+---
+
+#### `union(arrayA, arrayB)`
+
+Returns all unique elements from both arrays.
+
+```typescript
+union(a: Array<T>, b: Array<T>): Array<T>
+```
+
+**Example:**
+```javascript
+import { union } from 'orlando-transducers';
+
+const a = [1, 2, 3];
+const b = [3, 4, 5];
+const allUnique = union(a, b);
+// allUnique: [1, 2, 3, 4, 5]
+```
+
+**Use cases:**
+- Combining datasets
+- Merging unique items
+- Set union
+
+---
+
+#### `symmetricDifference(arrayA, arrayB)`
+
+Returns elements in either array but not both.
+
+```typescript
+symmetricDifference(a: Array<T>, b: Array<T>): Array<T>
+```
+
+**Example:**
+```javascript
+import { symmetricDifference } from 'orlando-transducers';
+
+const a = [1, 2, 3, 4];
+const b = [3, 4, 5, 6];
+const unique = symmetricDifference(a, b);
+// unique: [1, 2, 5, 6]
+```
+
+**Use cases:**
+- Finding differences
+- XOR operations
+- Change detection
+
+---
+
+### Logic Functions (Phase 3)
+
+Predicate combinators for cleaner conditional logic.
+
+#### `both(pred1, pred2)`
+
+Combines two predicates with AND logic.
+
+```typescript
+both(p1: (value: T) => boolean, p2: (value: T) => boolean): (value: T) => boolean
+```
+
+**Example:**
+```javascript
+import { both } from 'orlando-transducers';
+
+const isPositive = x => x > 0;
+const isEven = x => x % 2 === 0;
+const isPositiveEven = both(isPositive, isEven);
+
+const result = [1, 2, 3, 4, -2].filter(isPositiveEven);
+// result: [2, 4]
+```
+
+---
+
+#### `either(pred1, pred2)`
+
+Combines two predicates with OR logic.
+
+```typescript
+either(p1: (value: T) => boolean, p2: (value: T) => boolean): (value: T) => boolean
+```
+
+**Example:**
+```javascript
+import { either } from 'orlando-transducers';
+
+const isSmall = x => x < 10;
+const isLarge = x => x > 100;
+const isExtreme = either(isSmall, isLarge);
+
+const result = [5, 50, 105].filter(isExtreme);
+// result: [5, 105]
+```
+
+---
+
+#### `complement(predicate)`
+
+Negates a predicate.
+
+```typescript
+complement(pred: (value: T) => boolean): (value: T) => boolean
+```
+
+**Example:**
+```javascript
+import { complement } from 'orlando-transducers';
+
+const isEven = x => x % 2 === 0;
+const isOdd = complement(isEven);
+
+const result = [1, 2, 3, 4, 5].filter(isOdd);
+// result: [1, 3, 5]
+```
+
+---
+
+#### `allPass(predicates)`
+
+Returns true if ALL predicates pass.
+
+```typescript
+allPass(predicates: Array<(value: T) => boolean>): (value: T) => boolean
+```
+
+**Example:**
+```javascript
+import { allPass } from 'orlando-transducers';
+
+const isValid = allPass([
+  user => user.age >= 18,
+  user => user.email.includes('@'),
+  user => user.verified
+]);
+
+const validUsers = users.filter(isValid);
+```
+
+---
+
+#### `anyPass(predicates)`
+
+Returns true if ANY predicate passes.
+
+```typescript
+anyPass(predicates: Array<(value: T) => boolean>): (value: T) => boolean
+```
+
+**Example:**
+```javascript
+import { anyPass } from 'orlando-transducers';
+
+const hasDiscount = anyPass([
+  user => user.isPremium,
+  user => user.isStudent,
+  user => user.couponCode
+]);
+
+const discountedUsers = users.filter(hasDiscount);
+```
+
+---
+
 ## Common Patterns
 
 ### Pagination
