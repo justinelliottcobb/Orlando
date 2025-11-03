@@ -1616,8 +1616,9 @@ where
 /// use orlando_transducers::{mode, transforms::Map};
 ///
 /// let mod_3 = Map::new(|x: i32| x % 3);
-/// let result = mode(&mod_3, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
-/// // Most common mod 3 value is 0: [3, 6, 9]
+/// let result = mode(&mod_3, vec![3, 6, 9, 12, 1, 2]);
+/// // Most common mod 3 value is 0: [3, 6, 9, 12] = 4 times
+/// // mod 3 = 1: [1] = 1 time, mod 3 = 2: [2] = 1 time
 /// assert_eq!(result, Some(0));
 /// ```
 pub fn mode<T, U, Iter>(transducer: &impl Transducer<T, U>, source: Iter) -> Option<U>
