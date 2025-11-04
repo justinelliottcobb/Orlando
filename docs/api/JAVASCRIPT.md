@@ -2135,6 +2135,621 @@ const complexTransform = new When(
 
 ---
 
+## Functional Lenses (Optics) ✨ NEW in v0.4.0
+
+Orlando provides functional lenses for clean, composable, immutable updates to nested data structures. Lenses eliminate verbose object spreading and provide a principled way to work with nested data.
+
+### What are Lenses?
+
+A lens is a first-class accessor that focuses on a part of a data structure, enabling immutable get/set/transform operations.
+
+**Traditional approach** (verbose and error-prone):
+```javascript
+// Deep nested update with spreading
+const updateCity = (user, newCity) => ({
+  ...user,
+  address: {
+    ...user.address,
+    city: newCity
+  }
+});
+```
+
+**Orlando lenses** (clean and composable):
+```javascript
+import { lensPath } from 'orlando-transducers';
+
+const cityLens = lensPath(['address', 'city']);
+const updated = cityLens.set(user, newCity);
+```
+
+### Why Lenses?
+
+1. **No nested spreading** - Clean syntax for deep updates
+2. **Composable** - Build complex accessors from simple ones
+3. **Type-safe** - Optional lenses for nullable fields
+4. **Streaming** - Combine with transducers for bounded-memory processing
+
+---
+
+### Creating Lenses
+
+#### `lens(property)`
+
+Creates a lens focusing on a single property.
+
+```typescript
+lens(property: string): JsLens
+```
+
+**Example:**
+```javascript
+import { lens } from 'orlando-transducers';
+
+const user = { name: 'Alice', age: 30 };
+
+const nameLens = lens('name');
+console.log(nameLens.get(user));           // 'Alice'
+
+const updated = nameLens.set(user, 'Bob');
+console.log(updated.name);                 // 'Bob'
+console.log(user.name);                    // 'Alice' (original unchanged)
+```
+
+**Use cases:**
+- Simple property access
+- Single-level immutable updates
+- Building blocks for composition
+
+---
+
+#### `lensPath(path)`
+
+Creates a lens focusing on a deep nested property via an array path.
+
+```typescript
+lensPath(path: Array<string>): JsLens
+```
+
+**Example:**
+```javascript
+import { lensPath } from 'orlando-transducers';
+
+const user = {
+  name: 'Alice',
+  address: {
+    city: 'NYC',
+    zip: '10001'
+  }
+};
+
+const cityLens = lensPath(['address', 'city']);
+console.log(cityLens.get(user));          // 'NYC'
+
+const updated = cityLens.set(user, 'LA');
+console.log(updated.address.city);         // 'LA'
+console.log(user.address.city);            // 'NYC' (original unchanged)
+```
+
+**Use cases:**
+- Deep nested updates
+- Avoiding manual composition
+- Clean multi-level access
+
+---
+
+#### `optional(property)`
+
+Creates an optional lens for properties that may not exist.
+
+```typescript
+optional(property: string): JsOptional
+```
+
+**Example:**
+```javascript
+import { optional } from 'orlando-transducers';
+
+const addressLens = optional('address');
+
+const user1 = { name: 'Alice', address: { city: 'NYC' } };
+const user2 = { name: 'Bob' };
+
+console.log(addressLens.get(user1));       // { city: 'NYC' }
+console.log(addressLens.get(user2));       // undefined
+
+// over is a no-op when value doesn't exist
+const updated = addressLens.over(user2, addr => ({ ...addr, city: 'LA' }));
+console.log(updated);                      // { name: 'Bob' } (unchanged)
+```
+
+**Use cases:**
+- Nullable fields
+- Safe optional access
+- Conditional updates
+- Configuration with optional fields
+
+---
+
+### Lens Methods
+
+All lenses (created with `lens()` or `lensPath()`) support these methods:
+
+#### `get(source)`
+
+Extracts the focused value from the source object.
+
+```typescript
+get(source: Object): any
+```
+
+**Example:**
+```javascript
+const nameLens = lens('name');
+const user = { name: 'Alice', age: 30 };
+console.log(nameLens.get(user)); // 'Alice'
+```
+
+---
+
+#### `set(source, value)`
+
+Updates the focused value immutably, returning a new object.
+
+```typescript
+set(source: Object, value: any): Object
+```
+
+**Example:**
+```javascript
+const nameLens = lens('name');
+const user = { name: 'Alice', age: 30 };
+const updated = nameLens.set(user, 'Bob');
+// updated: { name: 'Bob', age: 30 }
+// user is unchanged
+```
+
+**Important:** This returns a **new object**. The original is never modified.
+
+---
+
+#### `over(source, fn)`
+
+Transforms the focused value by applying a function.
+
+```typescript
+over(source: Object, fn: (value: any) => any): Object
+```
+
+**Example:**
+```javascript
+const ageLens = lens('age');
+const user = { name: 'Alice', age: 30 };
+
+const older = ageLens.over(user, age => age + 1);
+// older: { name: 'Alice', age: 31 }
+
+const nameLens = lens('name');
+const upper = nameLens.over(user, name => name.toUpperCase());
+// upper: { name: 'ALICE', age: 30 }
+```
+
+**Use cases:**
+- Incrementing counters
+- String transformations
+- Mathematical operations
+- Any computed update
+
+---
+
+#### `compose(otherLens)`
+
+Composes two lenses to focus deeper into nested structures.
+
+```typescript
+compose(otherLens: JsLens): JsLens
+```
+
+**Example:**
+```javascript
+const addressLens = lens('address');
+const cityLens = lens('city');
+const fullLens = addressLens.compose(cityLens);
+
+const user = {
+  name: 'Alice',
+  address: { city: 'NYC', zip: '10001' }
+};
+
+console.log(fullLens.get(user));          // 'NYC'
+const updated = fullLens.set(user, 'LA');
+console.log(updated.address.city);         // 'LA'
+```
+
+**Composition is associative:**
+```javascript
+// These are equivalent
+lensPath(['a', 'b', 'c'])
+lens('a').compose(lens('b')).compose(lens('c'))
+```
+
+---
+
+### Optional Methods
+
+Optionals (created with `optional()`) support these methods:
+
+#### `get(source)`
+
+Extracts the focused value, returning `undefined` if it doesn't exist.
+
+```typescript
+get(source: Object): any | undefined
+```
+
+**Example:**
+```javascript
+const addressLens = optional('address');
+
+const user1 = { name: 'Alice', address: { city: 'NYC' } };
+const user2 = { name: 'Bob' };
+
+console.log(addressLens.get(user1));  // { city: 'NYC' }
+console.log(addressLens.get(user2));  // undefined
+```
+
+---
+
+#### `getOr(source, default)`
+
+Extracts the focused value with a fallback default.
+
+```typescript
+getOr(source: Object, default: any): any
+```
+
+**Example:**
+```javascript
+const addressLens = optional('address');
+
+const user = { name: 'Bob' };
+const addr = addressLens.getOr(user, { city: 'Unknown', zip: '00000' });
+// addr: { city: 'Unknown', zip: '00000' }
+```
+
+**Use cases:**
+- Configuration with defaults
+- Safe data access
+- Fallback values
+
+---
+
+#### `set(source, value)`
+
+Updates the focused value immutably (creates the property if it doesn't exist).
+
+```typescript
+set(source: Object, value: any): Object
+```
+
+**Example:**
+```javascript
+const phoneLens = optional('phone');
+
+const user = { name: 'Alice' };
+const updated = phoneLens.set(user, '555-1234');
+// updated: { name: 'Alice', phone: '555-1234' }
+```
+
+---
+
+#### `over(source, fn)`
+
+Transforms the focused value only if it exists. Returns source unchanged if value is missing.
+
+```typescript
+over(source: Object, fn: (value: any) => any): Object
+```
+
+**Example:**
+```javascript
+const discountLens = optional('discount');
+
+const item1 = { price: 100, discount: 10 };
+const item2 = { price: 100 };
+
+const doubled1 = discountLens.over(item1, d => d * 2);
+// doubled1: { price: 100, discount: 20 }
+
+const doubled2 = discountLens.over(item2, d => d * 2);
+// doubled2: { price: 100 } (unchanged - no discount to transform)
+```
+
+---
+
+### React State Management Example
+
+Lenses are perfect for React state updates:
+
+```javascript
+import { useState } from 'react';
+import { lens, lensPath } from 'orlando-transducers';
+
+function UserProfile() {
+  const [user, setUser] = useState({
+    name: 'Alice',
+    email: 'alice@example.com',
+    preferences: {
+      theme: 'dark',
+      notifications: true
+    }
+  });
+
+  const nameLens = lens('name');
+  const themeLens = lensPath(['preferences', 'theme']);
+
+  const updateName = (newName) => {
+    setUser(nameLens.set(user, newName));
+  };
+
+  const toggleTheme = () => {
+    setUser(themeLens.over(user, theme =>
+      theme === 'dark' ? 'light' : 'dark'
+    ));
+  };
+
+  return (
+    <div>
+      <input
+        value={user.name}
+        onChange={(e) => updateName(e.target.value)}
+      />
+      <button onClick={toggleTheme}>
+        Theme: {user.preferences.theme}
+      </button>
+    </div>
+  );
+}
+```
+
+**Benefits:**
+- No nested spreading
+- Type-safe with TypeScript
+- Reusable lens definitions
+- Clear, declarative intent
+
+---
+
+### Shopping Cart Example
+
+Complex state management made simple:
+
+```javascript
+import { useState } from 'react';
+import { lens, optional } from 'orlando-transducers';
+
+function ShoppingCart() {
+  const [cart, setCart] = useState({
+    items: [
+      { id: 1, name: 'Widget', quantity: 2, price: 10 },
+      { id: 2, name: 'Gadget', quantity: 1, price: 20 }
+    ],
+    discount: null
+  });
+
+  const itemsLens = lens('items');
+  const discountLens = optional('discount');
+
+  const updateQuantity = (itemId, newQuantity) => {
+    const updated = cart.items.map(item =>
+      item.id === itemId
+        ? lens('quantity').set(item, newQuantity)
+        : item
+    );
+    setCart(itemsLens.set(cart, updated));
+  };
+
+  const applyDiscount = (discountCode) => {
+    setCart(discountLens.set(cart, { code: discountCode, percent: 10 }));
+  };
+
+  const total = cart.items.reduce((sum, item) =>
+    sum + (item.price * item.quantity), 0
+  );
+
+  const discountAmount = discountLens.get(cart)
+    ? total * (cart.discount.percent / 100)
+    : 0;
+
+  return (
+    <div>
+      {cart.items.map(item => (
+        <div key={item.id}>
+          {item.name} × {item.quantity}
+          <button onClick={() => updateQuantity(item.id, item.quantity + 1)}>
+            +
+          </button>
+        </div>
+      ))}
+      <p>Subtotal: ${total}</p>
+      {discountAmount > 0 && <p>Discount: -${discountAmount}</p>}
+      <p>Total: ${total - discountAmount}</p>
+    </div>
+  );
+}
+```
+
+---
+
+### Streaming Lenses: The Killer Feature ⚡
+
+**Orlando is the first lens library to integrate with transducers** for streaming data processing with lenses.
+
+#### Traditional Approach (Multiple Passes)
+
+```javascript
+// 1. Extract nested values (full array iteration)
+const cities = users.map(user => user.address.city);
+
+// 2. Filter (full array iteration)
+const nyCities = cities.filter(city => city === 'NYC');
+
+// 3. Unique (full array iteration)
+const unique = [...new Set(nyCities)];
+
+// Result: 3 full passes through data
+```
+
+#### Orlando Streaming Lenses (Single Pass)
+
+```javascript
+import { lens, Pipeline } from 'orlando-transducers';
+
+const cityLens = lensPath(['address', 'city']);
+
+const unique = new Pipeline()
+  .map(user => cityLens.get(user))     // Extract with lens
+  .filter(city => city === 'NYC')       // Filter
+  .unique()                              // Deduplicate
+  .toArray(users);                       // Single pass!
+```
+
+**Benefits:**
+- Single pass through data
+- No intermediate arrays
+- Bounded memory usage
+- Early termination support
+- WASM performance
+
+#### Bulk Updates with Lenses + Transducers
+
+```javascript
+import { lens, Pipeline } from 'orlando-transducers';
+
+const users = [
+  { name: 'alice', email: 'ALICE@EXAMPLE.COM', age: 30 },
+  { name: 'bob', email: 'BOB@EXAMPLE.COM', age: 25 }
+];
+
+const nameLens = lens('name');
+const emailLens = lens('email');
+const ageLens = lens('age');
+
+// Normalize all users in a single pass
+const normalized = new Pipeline()
+  .map(user => nameLens.over(user, name => name.toUpperCase()))
+  .map(user => emailLens.over(user, email => email.toLowerCase()))
+  .map(user => ageLens.over(user, age => age + 1))
+  .toArray(users);
+
+// Result: [
+//   { name: 'ALICE', email: 'alice@example.com', age: 31 },
+//   { name: 'BOB', email: 'bob@example.com', age: 26 }
+// ]
+```
+
+---
+
+### Lens Laws
+
+Orlando lenses satisfy three mathematical laws guaranteeing correctness:
+
+#### 1. GetPut Law
+```javascript
+// Setting what you get doesn't change the object
+const l = lens('name');
+const obj = { name: 'Alice' };
+l.set(obj, l.get(obj)) === obj  // ✓ true (structurally)
+```
+
+#### 2. PutGet Law
+```javascript
+// Getting what you just set returns that value
+const l = lens('name');
+const obj = { name: 'Alice' };
+l.get(l.set(obj, 'Bob')) === 'Bob'  // ✓ true
+```
+
+#### 3. PutPut Law
+```javascript
+// Second set wins
+const l = lens('name');
+const obj = { name: 'Alice' };
+l.set(l.set(obj, 'Bob'), 'Charlie') === l.set(obj, 'Charlie')  // ✓ true (structurally)
+```
+
+These laws are automatically verified via property-based tests in Orlando's test suite.
+
+---
+
+### TypeScript Support
+
+Lenses work seamlessly with TypeScript:
+
+```typescript
+import { lens, lensPath, optional } from 'orlando-transducers';
+
+interface User {
+  name: string;
+  age: number;
+  address?: {
+    city: string;
+    zip: string;
+  };
+}
+
+const user: User = {
+  name: 'Alice',
+  age: 30,
+  address: { city: 'NYC', zip: '10001' }
+};
+
+const nameLens = lens('name');
+const cityLens = lensPath(['address', 'city']);
+const addressLens = optional('address');
+
+const updated: User = nameLens.set(user, 'Bob');
+const city: any = cityLens.get(user);
+const addr: any = addressLens.getOr(user, { city: 'Unknown', zip: '00000' });
+```
+
+---
+
+### Performance Tips
+
+1. **Create lenses once, reuse them:**
+   ```javascript
+   // Good - create once
+   const nameLens = lens('name');
+   const updateUser = (user) => nameLens.set(user, 'New Name');
+
+   // Avoid - creates new lens every call
+   const updateUser = (user) => lens('name').set(user, 'New Name');
+   ```
+
+2. **Use lensPath for deep nesting:**
+   ```javascript
+   // Good - single lens
+   const cityLens = lensPath(['address', 'location', 'city']);
+
+   // Avoid - manual composition
+   const cityLens = lens('address')
+     .compose(lens('location'))
+     .compose(lens('city'));
+   ```
+
+3. **Combine with transducers for large datasets:**
+   ```javascript
+   // Process millions of records in bounded memory
+   const nameLens = lens('name');
+   const normalized = new Pipeline()
+     .map(user => nameLens.over(user, name => name.trim()))
+     .filter(user => user.active)
+     .toArray(largeDataset);
+   ```
+
+---
+
 ## Next Steps
 
 - Check out the [Hybrid Composition Guide](../HYBRID_COMPOSITION.md) for combining transducers with multi-input operations

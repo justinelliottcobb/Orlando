@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2025-01-XX
+
+### Added
+
+#### Phase 6a: Functional Optics (Lenses)
+
+**Core Optics:**
+- `Lens<S, A>` - Total focus on nested data with get/set/over operations
+- `Optional<S, A>` - Partial focus for nullable fields with safe None handling
+- Lens composition via `compose()` for deep nested access
+- All three lens laws verified via property-based tests (GetPut, PutGet, PutPut)
+
+**JavaScript API:**
+- `lens(property)` - Create a lens focusing on an object property
+- `lensPath(path)` - Create a lens for deep nested paths via arrays
+- `optional(property)` - Create an optional lens for nullable fields
+- `JsLens` methods: `get()`, `set()`, `over()`, `compose()`
+- `JsOptional` methods: `get()`, `getOr()`, `set()`, `over()`
+
+**Unique Feature - Streaming Lenses:**
+- **First lens library to integrate with transducers** for streaming data processing
+- Extract nested values with lenses, transform with transducers in single pass
+- Bounded memory processing of large datasets
+- Combines functional optics with high-performance streaming
+
+**Testing:**
+- 24 new unit tests for Rust lens operations
+- 12 property-based tests verifying lens laws automatically
+- 14 comprehensive WASM tests for JavaScript API
+- Lens composition correctness tests
+- Optional Some/None behavior tests
+
+**Documentation:**
+- Comprehensive Phase 6 implementation plan
+- Competitive analysis of existing lens libraries
+- Lens laws documentation with examples
+- Streaming lens integration examples
+- Real-world use cases (React/Redux state updates, bulk transformations)
+
+#### Infrastructure
+- Total tests: 243 (229 unit + 127 property + 64 integration + 111 doc)
+- Type aliases for clippy compliance
+- Full TypeScript definitions auto-generated
+
+### Changed
+- Updated README.md with comprehensive optics section
+- Enhanced project structure documentation
+- Added optics to API reference tables
+
+## [0.3.0] - 2025-01-24
+
 ### Added
 - CI/CD pipeline for automated npm publishing
 - Comprehensive publishing guide (PUBLISHING.md)
