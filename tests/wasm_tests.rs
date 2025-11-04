@@ -5,6 +5,7 @@
 #![cfg(target_arch = "wasm32")]
 
 use orlando_transducers::*;
+use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
@@ -527,4 +528,297 @@ fn test_wasm_pipeline_reduce_with_stateful_ops() {
 
     // Even numbers [2, 4, 6], sum = 12
     assert_eq!(result.as_f64(), Some(12.0));
+}
+
+// ============================================================================
+// Optics Tests
+// ============================================================================
+
+#[wasm_bindgen_test]
+fn test_wasm_lens_get() {
+    use js_sys::Object;
+    use orlando_transducers::lens;
+    use wasm_bindgen::JsValue;
+
+    let obj = Object::new();
+    js_sys::Reflect::set(&obj, &"name".into(), &"Alice".into()).unwrap();
+    js_sys::Reflect::set(&obj, &"age".into(), &30.into()).unwrap();
+
+    let name_lens = lens("name");
+    let name = name_lens.get(&obj.into());
+
+    assert_eq!(name.as_string(), Some("Alice".to_string()));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_lens_set() {
+    use js_sys::Object;
+    use orlando_transducers::lens;
+    use wasm_bindgen::JsValue;
+
+    let obj = Object::new();
+    js_sys::Reflect::set(&obj, &"name".into(), &"Alice".into()).unwrap();
+    js_sys::Reflect::set(&obj, &"age".into(), &30.into()).unwrap();
+
+    let name_lens = lens("name");
+    let updated = name_lens.set(obj.as_ref(), "Bob".into());
+
+    // Check new object has new value
+    let updated_obj = updated.dyn_ref::<Object>().unwrap();
+    let new_name = js_sys::Reflect::get(updated_obj, &"name".into()).unwrap();
+    assert_eq!(new_name.as_string(), Some("Bob".to_string()));
+
+    // Check original object unchanged
+    let orig_name = js_sys::Reflect::get(&obj, &"name".into()).unwrap();
+    assert_eq!(orig_name.as_string(), Some("Alice".to_string()));
+
+    // Check other fields preserved
+    let new_age = js_sys::Reflect::get(updated_obj, &"age".into()).unwrap();
+    assert_eq!(new_age.as_f64(), Some(30.0));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_lens_over() {
+    use js_sys::{Function, Object};
+    use orlando_transducers::lens;
+    use wasm_bindgen::JsValue;
+
+    let obj = Object::new();
+    js_sys::Reflect::set(&obj, &"name".into(), &"Alice".into()).unwrap();
+
+    let name_lens = lens("name");
+    let to_upper = Function::new_with_args("s", "return s.toUpperCase()");
+    let updated = name_lens.over(&obj.into(), &to_upper);
+
+    let updated_obj = updated.dyn_ref::<Object>().unwrap();
+    let new_name = js_sys::Reflect::get(updated_obj, &"name".into()).unwrap();
+    assert_eq!(new_name.as_string(), Some("ALICE".to_string()));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_lens_compose() {
+    use js_sys::Object;
+    use orlando_transducers::lens;
+    use wasm_bindgen::JsValue;
+
+    // Create nested object: { address: { city: "NYC" } }
+    let address = Object::new();
+    js_sys::Reflect::set(&address, &"city".into(), &"NYC".into()).unwrap();
+
+    let user = Object::new();
+    js_sys::Reflect::set(&user, &"name".into(), &"Alice".into()).unwrap();
+    js_sys::Reflect::set(&user, &"address".into(), &address).unwrap();
+
+    // Compose address.city lens
+    let address_lens = lens("address");
+    let city_lens = lens("city");
+    let user_city_lens = address_lens.compose(&city_lens);
+
+    // Test get
+    let city = user_city_lens.get(user.as_ref());
+    assert_eq!(city.as_string(), Some("NYC".to_string()));
+
+    // Test set
+    let updated = user_city_lens.set(user.as_ref(), "Boston".into());
+    let updated_obj = updated.dyn_ref::<Object>().unwrap();
+    let updated_address = js_sys::Reflect::get(updated_obj, &"address".into()).unwrap();
+    let updated_address_obj = updated_address.dyn_ref::<Object>().unwrap();
+    let updated_city = js_sys::Reflect::get(updated_address_obj, &"city".into()).unwrap();
+    assert_eq!(updated_city.as_string(), Some("Boston".to_string()));
+
+    // Original unchanged
+    let orig_address = js_sys::Reflect::get(&user, &"address".into()).unwrap();
+    let orig_address_obj = orig_address.dyn_ref::<Object>().unwrap();
+    let orig_city = js_sys::Reflect::get(orig_address_obj, &"city".into()).unwrap();
+    assert_eq!(orig_city.as_string(), Some("NYC".to_string()));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_lens_path() {
+    use js_sys::{Array, Object};
+    use orlando_transducers::lens_path;
+    use wasm_bindgen::JsValue;
+
+    // Create nested object
+    let address = Object::new();
+    js_sys::Reflect::set(&address, &"city".into(), &"NYC".into()).unwrap();
+    js_sys::Reflect::set(&address, &"zip".into(), &"10001".into()).unwrap();
+
+    let user = Object::new();
+    js_sys::Reflect::set(&user, &"name".into(), &"Alice".into()).unwrap();
+    js_sys::Reflect::set(&user, &"address".into(), &address).unwrap();
+
+    // Create path lens
+    let path = Array::new();
+    path.push(&"address".into());
+    path.push(&"city".into());
+
+    let city_lens = lens_path(path.as_ref()).unwrap();
+
+    // Test get
+    let city = city_lens.get(user.as_ref());
+    assert_eq!(city.as_string(), Some("NYC".to_string()));
+
+    // Test set
+    let updated = city_lens.set(user.as_ref(), "LA".into());
+    let updated_obj = updated.dyn_ref::<Object>().unwrap();
+    let updated_address = js_sys::Reflect::get(updated_obj, &"address".into()).unwrap();
+    let updated_address_obj = updated_address.dyn_ref::<Object>().unwrap();
+    let updated_city = js_sys::Reflect::get(updated_address_obj, &"city".into()).unwrap();
+    assert_eq!(updated_city.as_string(), Some("LA".to_string()));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_optional_get_some() {
+    use js_sys::Object;
+    use orlando_transducers::optional;
+    use wasm_bindgen::JsValue;
+
+    let obj = Object::new();
+    js_sys::Reflect::set(&obj, &"name".into(), &"Alice".into()).unwrap();
+    js_sys::Reflect::set(&obj, &"email".into(), &"alice@example.com".into()).unwrap();
+
+    let email_lens = optional("email");
+    let email = email_lens.get(&obj.into());
+
+    assert_eq!(email.as_string(), Some("alice@example.com".to_string()));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_optional_get_none() {
+    use js_sys::Object;
+    use orlando_transducers::optional;
+    use wasm_bindgen::JsValue;
+
+    let obj = Object::new();
+    js_sys::Reflect::set(&obj, &"name".into(), &"Alice".into()).unwrap();
+
+    let email_lens = optional("email");
+    let email = email_lens.get(&obj.into());
+
+    assert!(email.is_undefined());
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_optional_get_or() {
+    use js_sys::Object;
+    use orlando_transducers::optional;
+    use wasm_bindgen::JsValue;
+
+    let obj = Object::new();
+    js_sys::Reflect::set(&obj, &"name".into(), &"Alice".into()).unwrap();
+
+    let email_lens = optional("email");
+    let email = email_lens.get_or(&obj.into(), "no-email@example.com".into());
+
+    assert_eq!(email.as_string(), Some("no-email@example.com".to_string()));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_optional_over_some() {
+    use js_sys::{Function, Object};
+    use orlando_transducers::optional;
+    use wasm_bindgen::JsValue;
+
+    let obj = Object::new();
+    js_sys::Reflect::set(&obj, &"email".into(), &"alice@example.com".into()).unwrap();
+
+    let email_lens = optional("email");
+    let to_upper = Function::new_with_args("s", "return s.toUpperCase()");
+    let updated = email_lens.over(&obj.into(), &to_upper);
+
+    let updated_obj = updated.dyn_ref::<Object>().unwrap();
+    let new_email = js_sys::Reflect::get(updated_obj, &"email".into()).unwrap();
+    assert_eq!(new_email.as_string(), Some("ALICE@EXAMPLE.COM".to_string()));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_optional_over_none() {
+    use js_sys::{Function, Object};
+    use orlando_transducers::optional;
+    use wasm_bindgen::JsValue;
+
+    let obj = Object::new();
+    js_sys::Reflect::set(&obj, &"name".into(), &"Alice".into()).unwrap();
+
+    let email_lens = optional("email");
+    let to_upper = Function::new_with_args("s", "return s.toUpperCase()");
+    let updated = email_lens.over(&obj.into(), &to_upper);
+
+    // Should return original object since email doesn't exist
+    let updated_obj = updated.dyn_ref::<Object>().unwrap();
+    let name = js_sys::Reflect::get(updated_obj, &"name".into()).unwrap();
+    assert_eq!(name.as_string(), Some("Alice".to_string()));
+
+    let email = js_sys::Reflect::get(updated_obj, &"email".into()).unwrap();
+    assert!(email.is_undefined());
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_lens_law_get_put() {
+    use js_sys::Object;
+    use orlando_transducers::lens;
+    use wasm_bindgen::JsValue;
+
+    let obj = Object::new();
+    js_sys::Reflect::set(&obj, &"name".into(), &"Alice".into()).unwrap();
+    js_sys::Reflect::set(&obj, &"age".into(), &30.into()).unwrap();
+
+    let name_lens = lens("name");
+
+    // Law 1: set(obj, get(obj)) = obj
+    let value = name_lens.get(obj.as_ref());
+    let result = name_lens.set(obj.as_ref(), value);
+
+    let result_obj = result.dyn_ref::<Object>().unwrap();
+    let result_name = js_sys::Reflect::get(result_obj, &"name".into()).unwrap();
+    let result_age = js_sys::Reflect::get(result_obj, &"age".into()).unwrap();
+
+    assert_eq!(result_name.as_string(), Some("Alice".to_string()));
+    assert_eq!(result_age.as_f64(), Some(30.0));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_lens_law_put_get() {
+    use js_sys::Object;
+    use orlando_transducers::lens;
+    use wasm_bindgen::JsValue;
+
+    let obj = Object::new();
+    js_sys::Reflect::set(&obj, &"name".into(), &"Alice".into()).unwrap();
+
+    let name_lens = lens("name");
+
+    // Law 2: get(set(obj, value)) = value
+    let new_value = JsValue::from("Bob");
+    let updated = name_lens.set(&obj.into(), new_value.clone());
+    let retrieved = name_lens.get(&updated);
+
+    assert_eq!(retrieved.as_string(), Some("Bob".to_string()));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_lens_law_put_put() {
+    use js_sys::Object;
+    use orlando_transducers::lens;
+    use wasm_bindgen::JsValue;
+
+    let obj = Object::new();
+    js_sys::Reflect::set(&obj, &"name".into(), &"Alice".into()).unwrap();
+
+    let name_lens = lens("name");
+
+    // Law 3: set(set(obj, v1), v2) = set(obj, v2)
+    let temp = name_lens.set(obj.as_ref(), "Bob".into());
+    let result1 = name_lens.set(&temp, "Charlie".into());
+    let result2 = name_lens.set(obj.as_ref(), "Charlie".into());
+
+    let result1_obj = result1.dyn_ref::<Object>().unwrap();
+    let result2_obj = result2.dyn_ref::<Object>().unwrap();
+
+    let name1 = js_sys::Reflect::get(result1_obj, &"name".into()).unwrap();
+    let name2 = js_sys::Reflect::get(result2_obj, &"name".into()).unwrap();
+
+    assert_eq!(name1.as_string(), name2.as_string());
+    assert_eq!(name1.as_string(), Some("Charlie".to_string()));
 }

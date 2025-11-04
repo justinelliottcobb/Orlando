@@ -90,6 +90,9 @@ pub mod transforms;
 #[cfg(target_arch = "wasm32")]
 pub mod pipeline;
 
+#[cfg(target_arch = "wasm32")]
+pub mod optics_wasm;
+
 // Re-export main types for convenience
 pub use step::{cont, is_stopped, stop, unwrap_step, Step};
 pub use transducer::{Compose, Identity, Transducer};
@@ -117,6 +120,9 @@ pub use optics::{Lens, Optional};
 
 #[cfg(target_arch = "wasm32")]
 pub use pipeline::Pipeline;
+
+#[cfg(target_arch = "wasm32")]
+pub use optics_wasm::{lens, lens_path, optional, JsLens, JsOptional};
 
 // WASM initialization
 #[cfg(target_arch = "wasm32")]
