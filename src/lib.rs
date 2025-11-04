@@ -81,6 +81,7 @@
 
 pub mod collectors;
 pub mod logic;
+pub mod optics;
 pub mod simd;
 pub mod step;
 pub mod transducer;
@@ -110,6 +111,9 @@ pub use collectors::{
 
 // Re-export logic functions and conditional transducers
 pub use logic::{all_pass, any_pass, both, complement, either, IfElse, Unless, When};
+
+// Re-export optics
+pub use optics::{Lens, Optional};
 
 #[cfg(target_arch = "wasm32")]
 pub use pipeline::Pipeline;
