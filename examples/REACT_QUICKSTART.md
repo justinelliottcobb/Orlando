@@ -95,6 +95,191 @@ const result = pipeline.toArray(data);
 // => ['ALICE', 'CHARLIE']
 ```
 
+## Immutable State Updates with Lenses
+
+**NEW in v0.4.0!** Orlando now includes functional lenses for clean, type-safe state updates.
+
+### Basic Lens Usage
+
+```jsx
+import { useState } from 'react';
+import { lens, lensPath } from 'orlando-transducers';
+
+function UserProfile() {
+  const [user, setUser] = useState({
+    name: 'Alice',
+    email: 'alice@example.com',
+    preferences: {
+      theme: 'dark',
+      notifications: true
+    }
+  });
+
+  const nameLens = lens('name');
+  const themeLens = lensPath(['preferences', 'theme']);
+
+  const updateName = (newName) => {
+    setUser(nameLens.set(user, newName));
+  };
+
+  const toggleTheme = () => {
+    setUser(themeLens.over(user, theme =>
+      theme === 'dark' ? 'light' : 'dark'
+    ));
+  };
+
+  return (
+    <div>
+      <input
+        value={user.name}
+        onChange={(e) => updateName(e.target.value)}
+      />
+      <button onClick={toggleTheme}>
+        Theme: {user.preferences.theme}
+      </button>
+    </div>
+  );
+}
+```
+
+### Lens Benefits over Manual Spreading
+
+```jsx
+// ❌ Traditional approach - verbose and error-prone
+const updateCity = (newCity) => {
+  setUser({
+    ...user,
+    address: {
+      ...user.address,
+      city: newCity
+    }
+  });
+};
+
+// ✅ With lenses - clean and safe
+const cityLens = lensPath(['address', 'city']);
+const updateCity = (newCity) => {
+  setUser(cityLens.set(user, newCity));
+};
+```
+
+### Complex State Management Example
+
+```jsx
+import { useState } from 'react';
+import { lens, lensPath, optional } from 'orlando-transducers';
+
+function ShoppingCart() {
+  const [cart, setCart] = useState({
+    items: [
+      { id: 1, name: 'Widget', quantity: 2, price: 10 },
+      { id: 2, name: 'Gadget', quantity: 1, price: 20 }
+    ],
+    discount: null
+  });
+
+  const itemsLens = lens('items');
+  const discountLens = optional('discount');
+
+  // Update quantity for a specific item
+  const updateQuantity = (itemId, newQuantity) => {
+    const updated = cart.items.map(item =>
+      item.id === itemId
+        ? lens('quantity').set(item, newQuantity)
+        : item
+    );
+    setCart(itemsLens.set(cart, updated));
+  };
+
+  // Apply discount (optional field)
+  const applyDiscount = (discountCode) => {
+    setCart(discountLens.set(cart, { code: discountCode, percent: 10 }));
+  };
+
+  // Remove discount
+  const removeDiscount = () => {
+    const { discount, ...rest } = cart;
+    setCart(rest);
+  };
+
+  const total = cart.items.reduce((sum, item) =>
+    sum + (item.price * item.quantity), 0
+  );
+
+  const discountAmount = discountLens.get(cart)
+    ? total * (cart.discount.percent / 100)
+    : 0;
+
+  return (
+    <div>
+      {cart.items.map(item => (
+        <div key={item.id}>
+          {item.name} × {item.quantity}
+          <button onClick={() => updateQuantity(item.id, item.quantity + 1)}>
+            +
+          </button>
+        </div>
+      ))}
+      <p>Subtotal: ${total}</p>
+      {discountAmount > 0 && <p>Discount: -${discountAmount}</p>}
+      <p>Total: ${total - discountAmount}</p>
+    </div>
+  );
+}
+```
+
+### Combining Lenses with Transducers
+
+```jsx
+import { useState, useMemo } from 'react';
+import { lens, Pipeline } from 'orlando-transducers';
+
+function ProductList({ products }) {
+  const [search, setSearch] = useState('');
+  const [minPrice, setMinPrice] = useState(0);
+
+  const nameLens = lens('name');
+  const priceLens = lens('price');
+
+  const filtered = useMemo(() => {
+    return new Pipeline()
+      .filter(product =>
+        nameLens.get(product).toLowerCase().includes(search.toLowerCase())
+      )
+      .filter(product => priceLens.get(product) >= minPrice)
+      .map(product => ({
+        ...product,
+        displayPrice: `$${priceLens.get(product).toFixed(2)}`
+      }))
+      .toArray(products);
+  }, [products, search, minPrice]);
+
+  return (
+    <div>
+      <input
+        type="text"
+        placeholder="Search products..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
+      <input
+        type="number"
+        placeholder="Min price"
+        value={minPrice}
+        onChange={(e) => setMinPrice(Number(e.target.value))}
+      />
+      <ul>
+        {filtered.map(product => (
+          <li key={product.id}>
+            {product.name} - {product.displayPrice}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+```
+
 ## Performance Example
 
 ```javascript

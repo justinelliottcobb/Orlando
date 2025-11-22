@@ -128,6 +128,123 @@ const activeUserEmails = new Pipeline()
 const emails = activeUserEmails.toArray(users);
 ```
 
+## Functional Lenses (Optics)
+
+**NEW in v0.4.0!** Orlando now includes high-performance functional lenses for immutable data access and transformation.
+
+### What are Lenses?
+
+**Lenses provide composable, type-safe access to nested data structures.**
+
+Traditional JavaScript property updates require verbose spreading:
+
+```javascript
+// ❌ Traditional nested update - verbose and error-prone
+const updated = {
+  ...user,
+  address: {
+    ...user.address,
+    city: "Boston"
+  }
+};
+```
+
+Orlando lenses make this clean and composable:
+
+```javascript
+// ✅ Orlando lens - clean and composable
+import { lens, lensPath } from 'orlando-transducers';
+
+const cityLens = lensPath(['address', 'city']);
+const updated = cityLens.set(user, "Boston");
+```
+
+### Lens Operations
+
+| Method | Description | Example |
+|--------|-------------|---------|
+| `get(obj)` | Extract the focused value | `nameLens.get(user)` → `"Alice"` |
+| `set(obj, value)` | Immutably update the value | `nameLens.set(user, "Bob")` → new object |
+| `over(obj, fn)` | Transform the value with a function | `nameLens.over(user, s => s.toUpperCase())` |
+| `compose(other)` | Combine lenses for deeper access | `addressLens.compose(cityLens)` |
+
+### Quick Examples
+
+```javascript
+import init, { lens, lensPath, optional } from 'orlando-transducers';
+await init();
+
+const user = {
+  name: "Alice",
+  email: "alice@example.com",
+  address: {
+    city: "NYC",
+    zip: "10001"
+  }
+};
+
+// Simple property lens
+const nameLens = lens('name');
+nameLens.get(user);              // "Alice"
+nameLens.set(user, "Bob");       // { ...user, name: "Bob" }
+nameLens.over(user, s => s.toUpperCase());  // { ...user, name: "ALICE" }
+
+// Deep nested access with lensPath
+const cityLens = lensPath(['address', 'city']);
+cityLens.get(user);              // "NYC"
+cityLens.set(user, "Boston");    // { ...user, address: { ...address, city: "Boston" }}
+
+// Lens composition
+const addressLens = lens('address');
+const zipLens = lens('zip');
+const userZipLens = addressLens.compose(zipLens);
+userZipLens.get(user);           // "10001"
+
+// Optional lenses for nullable fields
+const phoneLens = optional('phone');
+phoneLens.get(user);             // undefined (property doesn't exist)
+phoneLens.getOr(user, "N/A");    // "N/A" (default value)
+phoneLens.over(user, normalize); // No-op if undefined, transforms if exists
+```
+
+### Streaming Lenses: The Killer Feature 🔥
+
+**Orlando uniquely combines lenses with transducers** for powerful streaming data transformations:
+
+```javascript
+import { lens, Pipeline } from 'orlando-transducers';
+
+const users = [
+  { name: "Alice", profile: { email: "alice@company.com", verified: true }},
+  { name: "Bob", profile: { email: "bob@gmail.com", verified: false }},
+  { name: "Carol", profile: { email: "carol@company.com", verified: true }}
+];
+
+// Extract → Filter → Transform pipeline
+const emailLens = lensPath(['profile', 'email']);
+const verifiedLens = lensPath(['profile', 'verified']);
+
+const companyEmails = new Pipeline()
+  .map(user => emailLens.get(user))           // Extract emails with lens
+  .filter(email => email.endsWith('@company.com'))  // Stream filter
+  .map(email => email.toLowerCase())          // Transform
+  .toArray(users.filter(u => verifiedLens.get(u)));
+
+// Result: ["alice@company.com", "carol@company.com"]
+```
+
+**No other lens library can do this!** Orlando is the first to integrate lenses with streaming transducers for processing large datasets with bounded memory.
+
+### Lens Laws
+
+All Orlando lenses are **mathematically proven correct** via property-based tests that verify the three lens laws:
+
+1. **GetPut**: `set(s, get(s)) = s` - Setting what you got changes nothing
+2. **PutGet**: `get(set(s, a)) = a` - Getting what you set returns that value
+3. **PutPut**: `set(set(s, a1), a2) = set(s, a2)` - Setting twice equals setting once
+
+This mathematical foundation ensures lenses compose correctly and behave predictably.
+
 ## API Reference
 
 All methods return a new `Pipeline` instance, allowing for fluent method chaining.
@@ -221,9 +338,80 @@ Operations for combining and comparing multiple arrays:
 | `difference(a, b)` | Elements in a but not b | `difference(a, b)` |
 | `cartesianProduct(a, b)` | All possible pairs | `cartesianProduct(colors, sizes)` |
 
+### Optics (Lenses)
+
+Functional lenses for immutable, composable data access:
+
+| Function/Method | Description | Example |
+|-----------------|-------------|---------|
+| `lens(property)` | Create a lens focusing on a property | `lens('name')` |
+| `lensPath(path)` | Create a lens for a nested path | `lensPath(['address', 'city'])` |
+| `optional(property)` | Create a lens for nullable fields | `optional('phone')` |
+| `.get(obj)` | Extract the focused value | `nameLens.get(user)` |
+| `.set(obj, value)` | Immutably update the value | `nameLens.set(user, "Bob")` |
+| `.over(obj, fn)` | Transform with a function | `nameLens.over(user, toUpper)` |
+| `.compose(other)` | Compose lenses for deep access | `addrLens.compose(cityLens)` |
+| `.getOr(obj, default)` | Get with default (optional only) | `phoneLens.getOr(user, "N/A")` |
+
 **Full API documentation:** [docs/api/JAVASCRIPT.md](docs/api/JAVASCRIPT.md)
 
 ## Real-World Examples
+
+### Immutable State Updates with Lenses
+
+```javascript
+import { lens, lensPath } from 'orlando-transducers';
+
+// React/Redux-style immutable state updates
+const state = {
+  user: {
+    profile: {
+      name: "Alice",
+      email: "alice@example.com"
+    },
+    preferences: {
+      theme: "dark",
+      notifications: true
+    }
+  }
+};
+
+// Update nested properties immutably
+const nameLens = lensPath(['user', 'profile', 'name']);
+const themeLens = lensPath(['user', 'preferences', 'theme']);
+
+const newState = themeLens.set(
+  nameLens.set(state, "Alicia"),
+  "light"
+);
+
+// Original state unchanged, new state has both updates
+console.log(state.user.profile.name);  // "Alice"
+console.log(newState.user.profile.name);  // "Alicia"
+console.log(newState.user.preferences.theme);  // "light"
+```
+
+### Bulk Updates with Lenses + Transducers
+
+```javascript
+import { lens, Pipeline } from 'orlando-transducers';
+
+const products = [
+  { id: 1, name: "Widget", price: 10, category: "tools" },
+  { id: 2, name: "Gadget", price: 20, category: "tools" },
+  { id: 3, name: "Doohickey", price: 15, category: "accessories" }
+];
+
+// Apply 20% discount to all tools
+const priceLens = lens('price');
+const categoryLens = lens('category');
+
+const discounted = products.map(product =>
+  categoryLens.get(product) === 'tools'
+    ? priceLens.over(product, price => price * 0.8)
+    : product
+);
+```
 
 ### Pagination
 
@@ -459,8 +647,11 @@ orlando/
 │   ├── transducer.rs   # Transducer trait & composition
 │   ├── transforms.rs   # Map, Filter, Take, etc.
 │   ├── collectors.rs   # Terminal operations
+│   ├── logic.rs        # Predicate combinators
+│   ├── optics.rs       # Functional lenses (Rust API)
+│   ├── optics_wasm.rs  # Lenses (JavaScript WASM API)
 │   ├── simd.rs         # SIMD optimizations
-│   └── pipeline.rs     # JavaScript WASM API
+│   └── pipeline.rs     # Transducers (JavaScript WASM API)
 ├── docs/api/           # API documentation
 ├── examples/           # Interactive HTML examples
 ├── tests/              # Integration & property tests

@@ -81,6 +81,7 @@
 
 pub mod collectors;
 pub mod logic;
+pub mod optics;
 pub mod simd;
 pub mod step;
 pub mod transducer;
@@ -88,6 +89,9 @@ pub mod transforms;
 
 #[cfg(target_arch = "wasm32")]
 pub mod pipeline;
+
+#[cfg(target_arch = "wasm32")]
+pub mod optics_wasm;
 
 // Re-export main types for convenience
 pub use step::{cont, is_stopped, stop, unwrap_step, Step};
@@ -111,8 +115,14 @@ pub use collectors::{
 // Re-export logic functions and conditional transducers
 pub use logic::{all_pass, any_pass, both, complement, either, IfElse, Unless, When};
 
+// Re-export optics
+pub use optics::{Lens, Optional};
+
 #[cfg(target_arch = "wasm32")]
 pub use pipeline::Pipeline;
+
+#[cfg(target_arch = "wasm32")]
+pub use optics_wasm::{lens, lens_path, optional, JsLens, JsOptional};
 
 // WASM initialization
 #[cfg(target_arch = "wasm32")]
