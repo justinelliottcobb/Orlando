@@ -835,3 +835,65 @@ fn test_iso_as_lens_composition() {
     let updated = wrapper_to_f.set(&w, 32.0);
     assert!((updated.inner - 0.0).abs() < 1e-10);
 }
+
+// ===== Geometric Optics Integration Tests =====
+
+#[test]
+fn test_geometric_optics_with_pipeline() {
+    use orlando_transducers::geometric_optics;
+
+    // Pipeline: stream of 3D multivectors → extract bivector part → filter by norm → take first 2
+    let multivectors = vec![
+        vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], // scalar only
+        vec![0.0, 0.0, 0.0, 5.0, 0.0, 5.0, 5.0, 0.0],  // bivector norm = sqrt(75)
+        vec![0.0, 0.0, 0.0, 0.1, 0.0, 0.0, 0.0, 0.0],  // small bivector
+        vec![0.0, 0.0, 0.0, 3.0, 0.0, 4.0, 0.0, 0.0],  // bivector norm = 5
+    ];
+
+    // Extract bivector norms, filter by threshold, take 2
+    let pipeline = Map::new(move |mv: Vec<f64>| {
+        let bv = geometric_optics::grade_extract(3, 2, &mv);
+        geometric_optics::norm(&bv)
+    })
+    .compose(Filter::new(|n: &f64| *n > 1.0))
+    .compose(Take::new(2));
+
+    let result = to_vec(&pipeline, multivectors);
+    assert_eq!(result.len(), 2);
+    assert!((result[0] - 75.0f64.sqrt()).abs() < 1e-10);
+    assert!((result[1] - 5.0).abs() < 1e-10);
+}
+
+#[test]
+fn test_geometric_optics_grade_project_in_pipeline() {
+    use orlando_transducers::geometric_optics;
+
+    // Pipeline: project each multivector to its vector part
+    let multivectors = vec![
+        vec![10.0, 1.0, 2.0, 99.0, 3.0, 99.0, 99.0, 99.0],
+        vec![20.0, 4.0, 5.0, 88.0, 6.0, 88.0, 88.0, 88.0],
+    ];
+
+    let pipeline = Map::new(move |mv: Vec<f64>| geometric_optics::grade_project(3, 1, &mv));
+
+    let result = to_vec(&pipeline, multivectors);
+    assert_eq!(result[0], vec![0.0, 1.0, 2.0, 0.0, 3.0, 0.0, 0.0, 0.0]);
+    assert_eq!(result[1], vec![0.0, 4.0, 5.0, 0.0, 6.0, 0.0, 0.0, 0.0]);
+}
+
+#[test]
+fn test_geometric_optics_pure_grade_filter() {
+    use orlando_transducers::geometric_optics;
+
+    // Filter to only pure k-vectors (single grade)
+    let multivectors = vec![
+        vec![0.0, 1.0, 2.0, 0.0, 3.0, 0.0, 0.0, 0.0], // pure vector
+        vec![1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], // mixed (scalar + vector)
+        vec![0.0, 0.0, 0.0, 1.0, 0.0, 2.0, 3.0, 0.0], // pure bivector
+    ];
+
+    let pipeline = Filter::new(move |mv: &Vec<f64>| geometric_optics::is_pure_grade(3, mv));
+
+    let result = to_vec(&pipeline, multivectors);
+    assert_eq!(result.len(), 2); // only the pure vector and pure bivector
+}
