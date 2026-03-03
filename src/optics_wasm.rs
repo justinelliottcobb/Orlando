@@ -6,6 +6,7 @@
 use js_sys::{Function, Object, Reflect};
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
 
 // Type aliases to satisfy clippy type_complexity lint
 type JsGetter = Rc<dyn Fn(&JsValue) -> JsValue>;
@@ -658,7 +659,9 @@ impl JsTraversal {
         let const_fn = Function::new_with_args("_", "return this");
 
         // Bind the value as `this` so the function returns it
-        let bound = const_fn.bind1(&value, &JsValue::undefined());
+        let bound: Function = const_fn
+            .bind1(&value, &JsValue::undefined())
+            .unchecked_into();
         (self.over_all_fn)(source, &bound)
     }
 }
