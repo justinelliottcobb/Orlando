@@ -124,9 +124,9 @@ pub use optics::{Fold, Iso, Lens, Optional, Prism, Traversal};
 
 // Re-export geometric optics
 pub use geometric_optics::{
-    blade_grade, blades_at_grade_count, component_get, component_set, grade_extract,
-    grade_indices, grade_involution, grade_mask, grade_project, grade_project_max, has_grade,
-    is_pure_grade, norm, norm_squared, normalize,
+    blade_grade, blades_at_grade_count, component_get, component_set, grade_extract, grade_indices,
+    grade_involution, grade_mask, grade_project, grade_project_max, has_grade, is_pure_grade, norm,
+    norm_squared, normalize,
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -139,8 +139,8 @@ pub use geometric_optics_wasm::{
     grade_extract as wasm_grade_extract, grade_indices as wasm_grade_indices,
     grade_involution as wasm_grade_involution, grade_mask as wasm_grade_mask,
     grade_project as wasm_grade_project, grade_project_max as wasm_grade_project_max,
-    has_grade as wasm_has_grade, is_pure_grade as wasm_is_pure_grade,
-    mv_norm, mv_norm_squared, mv_normalize, mv_reverse,
+    has_grade as wasm_has_grade, is_pure_grade as wasm_is_pure_grade, mv_norm, mv_norm_squared,
+    mv_normalize, mv_reverse,
 };
 
 #[cfg(target_arch = "wasm32")]

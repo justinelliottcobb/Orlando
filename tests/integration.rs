@@ -845,9 +845,9 @@ fn test_geometric_optics_with_pipeline() {
     // Pipeline: stream of 3D multivectors → extract bivector part → filter by norm → take first 2
     let multivectors = vec![
         vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], // scalar only
-        vec![0.0, 0.0, 0.0, 5.0, 0.0, 5.0, 5.0, 0.0],  // bivector norm = sqrt(75)
-        vec![0.0, 0.0, 0.0, 0.1, 0.0, 0.0, 0.0, 0.0],  // small bivector
-        vec![0.0, 0.0, 0.0, 3.0, 0.0, 4.0, 0.0, 0.0],  // bivector norm = 5
+        vec![0.0, 0.0, 0.0, 5.0, 0.0, 5.0, 5.0, 0.0], // bivector norm = sqrt(75)
+        vec![0.0, 0.0, 0.0, 0.1, 0.0, 0.0, 0.0, 0.0], // small bivector
+        vec![0.0, 0.0, 0.0, 3.0, 0.0, 4.0, 0.0, 0.0], // bivector norm = 5
     ];
 
     // Extract bivector norms, filter by threshold, take 2

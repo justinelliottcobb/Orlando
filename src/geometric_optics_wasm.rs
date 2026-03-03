@@ -164,11 +164,7 @@ pub fn component_get(coefficients: &Float64Array, blade_index: usize) -> Option<
 /// componentSet(mv, 1, 99); // Float64Array [1, 99, 3, 4]
 /// ```
 #[wasm_bindgen(js_name = "componentSet")]
-pub fn component_set(
-    coefficients: &Float64Array,
-    blade_index: usize,
-    value: f64,
-) -> Float64Array {
+pub fn component_set(coefficients: &Float64Array, blade_index: usize, value: f64) -> Float64Array {
     let v = to_vec(coefficients);
     to_float64_array(&geometric_optics::component_set(&v, blade_index, value))
 }

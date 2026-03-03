@@ -118,9 +118,7 @@ fn binomial(n: u32, k: u32) -> usize {
 #[must_use]
 pub fn grade_indices(dimension: u32, grade: u32) -> Vec<usize> {
     let total = 1usize << dimension;
-    (0..total)
-        .filter(|i| blade_grade(*i) == grade)
-        .collect()
+    (0..total).filter(|i| blade_grade(*i) == grade).collect()
 }
 
 /// Extract coefficients at a specific grade from a multivector coefficient array.
@@ -328,11 +326,7 @@ pub fn component_set(coefficients: &[f64], blade_index: usize, value: f64) -> Ve
 /// ```
 #[must_use]
 pub fn norm(coefficients: &[f64]) -> f64 {
-    coefficients
-        .iter()
-        .map(|c| c * c)
-        .sum::<f64>()
-        .sqrt()
+    coefficients.iter().map(|c| c * c).sum::<f64>().sqrt()
 }
 
 /// Compute the squared norm (avoids sqrt, useful for comparisons).
@@ -395,13 +389,7 @@ pub fn grade_involution(dimension: u32, coefficients: &[f64]) -> Vec<f64> {
         .iter()
         .enumerate()
         .take(total)
-        .map(|(i, c)| {
-            if blade_grade(i) % 2 == 1 {
-                -c
-            } else {
-                *c
-            }
-        })
+        .map(|(i, c)| if blade_grade(i) % 2 == 1 { -c } else { *c })
         .collect()
 }
 
@@ -536,19 +524,13 @@ mod tests {
     #[test]
     fn test_grade_project_vectors_only() {
         let projected = grade_project(3, 1, &sample_3d());
-        assert_eq!(
-            projected,
-            vec![0.0, 2.0, 3.0, 0.0, 5.0, 0.0, 0.0, 0.0]
-        );
+        assert_eq!(projected, vec![0.0, 2.0, 3.0, 0.0, 5.0, 0.0, 0.0, 0.0]);
     }
 
     #[test]
     fn test_grade_project_scalar_only() {
         let projected = grade_project(3, 0, &sample_3d());
-        assert_eq!(
-            projected,
-            vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        );
+        assert_eq!(projected, vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]);
     }
 
     #[test]
@@ -565,10 +547,7 @@ mod tests {
     fn test_grade_project_max() {
         let projected = grade_project_max(3, 1, &sample_3d());
         // Keep grades 0 and 1, zero grades 2 and 3
-        assert_eq!(
-            projected,
-            vec![1.0, 2.0, 3.0, 0.0, 5.0, 0.0, 0.0, 0.0]
-        );
+        assert_eq!(projected, vec![1.0, 2.0, 3.0, 0.0, 5.0, 0.0, 0.0, 0.0]);
     }
 
     #[test]
@@ -747,17 +726,14 @@ mod tests {
     #[test]
     fn test_grade_filter_pattern() {
         // Pattern: filter a collection of multivectors to only those with nonzero bivector part
-        let mvs = vec![
+        let mvs = [
             vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], // scalar only
             vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0], // has bivector
             vec![0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], // vector only
             vec![0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0], // has bivector
         ];
 
-        let with_bivectors: Vec<_> = mvs
-            .iter()
-            .filter(|mv| has_grade(3, 2, mv))
-            .collect();
+        let with_bivectors: Vec<_> = mvs.iter().filter(|mv| has_grade(3, 2, mv)).collect();
 
         assert_eq!(with_bivectors.len(), 2);
     }
