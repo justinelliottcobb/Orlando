@@ -61,6 +61,9 @@ use std::rc::Rc;
 type Getter<S, A> = Box<dyn Fn(&S) -> A>;
 type Setter<S, A> = Box<dyn Fn(&S, A) -> S>;
 type OptionalGetter<S, A> = Box<dyn Fn(&S) -> Option<A>>;
+type Reviewer<S, A> = Box<dyn Fn(A) -> S>;
+type FoldGetter<S, A> = Box<dyn Fn(&S) -> Vec<A>>;
+type TraversalSetter<S, A> = Box<dyn Fn(&S, &dyn Fn(A) -> A) -> S>;
 
 /// A Lens focuses on a part A of a structure S, allowing both reading and updating.
 ///
@@ -292,6 +295,357 @@ where
             }
             None => source.clone(),
         }
+    }
+}
+
+/// A Prism focuses on a variant A of a sum type S.
+///
+/// A Prism is defined by two functions:
+/// - `preview: &S -> Option<A>` - Try to extract the focused variant
+/// - `review: A -> S` - Construct the sum type from the variant
+///
+/// ## Prism Laws
+///
+/// 1. **Preview-Review**: `preview(review(a)) = Some(a)` — round-trip through review then preview
+/// 2. **Review-Preview**: If `preview(s) = Some(a)`, then `review(a)` reconstructs `s`
+///    (modulo other fields — strictly: `preview(s).map(review) = preview(s).map(|_| s)` for simple prisms)
+///
+/// ## Usage
+///
+/// ```rust
+/// use orlando_transducers::optics::Prism;
+///
+/// #[derive(Clone, Debug, PartialEq)]
+/// enum Shape {
+///     Circle(f64),
+///     Rectangle(f64, f64),
+/// }
+///
+/// let circle_prism = Prism::new(
+///     |s: &Shape| match s {
+///         Shape::Circle(r) => Some(*r),
+///         _ => None,
+///     },
+///     |r: f64| Shape::Circle(r),
+/// );
+///
+/// let shape = Shape::Circle(5.0);
+/// assert_eq!(circle_prism.preview(&shape), Some(5.0));
+/// assert_eq!(circle_prism.review(3.0), Shape::Circle(3.0));
+///
+/// let rect = Shape::Rectangle(2.0, 3.0);
+/// assert_eq!(circle_prism.preview(&rect), None);
+/// ```
+pub struct Prism<S, A>
+where
+    S: Clone,
+    A: Clone,
+{
+    preview_fn: OptionalGetter<S, A>,
+    review_fn: Reviewer<S, A>,
+    _phantom: PhantomData<(S, A)>,
+}
+
+impl<S, A> Prism<S, A>
+where
+    S: Clone,
+    A: Clone,
+{
+    /// Create a new prism from preview and review functions.
+    pub fn new<P, R>(preview_fn: P, review_fn: R) -> Self
+    where
+        P: Fn(&S) -> Option<A> + 'static,
+        R: Fn(A) -> S + 'static,
+    {
+        Prism {
+            preview_fn: Box::new(preview_fn),
+            review_fn: Box::new(review_fn),
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Try to extract the focused variant from the sum type.
+    pub fn preview(&self, source: &S) -> Option<A> {
+        (self.preview_fn)(source)
+    }
+
+    /// Construct the sum type from the focused variant.
+    pub fn review(&self, value: A) -> S {
+        (self.review_fn)(value)
+    }
+
+    /// Transform the focused variant using a function, if it matches.
+    ///
+    /// If the value doesn't match, returns the source unchanged.
+    pub fn over<F>(&self, source: &S, f: F) -> S
+    where
+        F: Fn(A) -> A,
+    {
+        match self.preview(source) {
+            Some(a) => self.review(f(a)),
+            None => source.clone(),
+        }
+    }
+}
+
+/// An Iso represents a lossless bidirectional conversion between types S and A.
+///
+/// An Iso is defined by two functions:
+/// - `to: &S -> A` - Convert from S to A
+/// - `from: A -> S` - Convert from A to S
+///
+/// ## Iso Laws
+///
+/// 1. **Round-trip forward**: `from(to(s)) = s` — converting and back is identity
+/// 2. **Round-trip backward**: `to(from(a)) = a` — converting and back is identity
+///
+/// ## Usage
+///
+/// ```rust
+/// use orlando_transducers::optics::Iso;
+///
+/// // Celsius ↔ Fahrenheit
+/// let celsius_fahrenheit = Iso::new(
+///     |c: &f64| *c * 9.0 / 5.0 + 32.0,
+///     |f: f64| (f - 32.0) * 5.0 / 9.0,
+/// );
+///
+/// let c = 100.0;
+/// let f = celsius_fahrenheit.to(&c);
+/// assert!((f - 212.0).abs() < 1e-10);
+///
+/// let back = celsius_fahrenheit.from(f);
+/// assert!((back - c).abs() < 1e-10);
+/// ```
+pub struct Iso<S, A>
+where
+    S: Clone,
+    A: Clone,
+{
+    to_fn: Getter<S, A>,
+    from_fn: Reviewer<S, A>,
+    _phantom: PhantomData<(S, A)>,
+}
+
+impl<S, A> Iso<S, A>
+where
+    S: Clone,
+    A: Clone,
+{
+    /// Create a new isomorphism from to and from functions.
+    pub fn new<T, F>(to_fn: T, from_fn: F) -> Self
+    where
+        T: Fn(&S) -> A + 'static,
+        F: Fn(A) -> S + 'static,
+    {
+        Iso {
+            to_fn: Box::new(to_fn),
+            from_fn: Box::new(from_fn),
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Convert from S to A.
+    pub fn to(&self, source: &S) -> A {
+        (self.to_fn)(source)
+    }
+
+    /// Convert from A to S.
+    pub fn from(&self, value: A) -> S {
+        (self.from_fn)(value)
+    }
+
+    /// Transform via the isomorphism: convert to A, apply f, convert back to S.
+    pub fn over<F>(&self, source: &S, f: F) -> S
+    where
+        F: Fn(A) -> A,
+    {
+        let a = self.to(source);
+        self.from(f(a))
+    }
+
+    /// Reverse the isomorphism: produce `Iso<A, S>`.
+    pub fn reverse(self) -> Iso<A, S>
+    where
+        S: 'static,
+        A: 'static,
+    {
+        let original_to = self.to_fn;
+        let original_from = self.from_fn;
+
+        Iso {
+            to_fn: Box::new(move |a: &A| (original_from)(a.clone())),
+            from_fn: Box::new(move |s: S| (original_to)(&s)),
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Convert this Iso into a Lens (every Iso is a valid Lens).
+    pub fn as_lens(self) -> Lens<S, A>
+    where
+        S: 'static,
+        A: 'static,
+    {
+        let to_fn = Rc::new(self.to_fn);
+        let from_fn = Rc::new(self.from_fn);
+
+        Lens::new(move |s: &S| to_fn(s), move |_s: &S, a: A| from_fn(a))
+    }
+
+    /// Convert this Iso into a Prism (every Iso is a valid Prism).
+    pub fn as_prism(self) -> Prism<S, A>
+    where
+        S: 'static,
+        A: 'static,
+    {
+        Prism::new(
+            move |s: &S| Some((self.to_fn)(s)),
+            move |a: A| (self.from_fn)(a),
+        )
+    }
+}
+
+/// A Fold extracts zero or more values of type A from a structure S (read-only).
+///
+/// A Fold is the read-only counterpart of a Traversal. It cannot modify the structure.
+///
+/// ## Usage
+///
+/// ```rust
+/// use orlando_transducers::optics::Fold;
+///
+/// let even_fold = Fold::new(
+///     |v: &Vec<i32>| v.iter().filter(|x| *x % 2 == 0).cloned().collect(),
+/// );
+///
+/// let data = vec![1, 2, 3, 4, 5, 6];
+/// assert_eq!(even_fold.fold_of(&data), vec![2, 4, 6]);
+/// ```
+pub struct Fold<S, A>
+where
+    S: Clone,
+    A: Clone,
+{
+    fold_fn: FoldGetter<S, A>,
+    _phantom: PhantomData<(S, A)>,
+}
+
+impl<S, A> Fold<S, A>
+where
+    S: Clone,
+    A: Clone,
+{
+    /// Create a new fold from an extraction function.
+    pub fn new<F>(fold_fn: F) -> Self
+    where
+        F: Fn(&S) -> Vec<A> + 'static,
+    {
+        Fold {
+            fold_fn: Box::new(fold_fn),
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Extract all focused values from the structure.
+    pub fn fold_of(&self, source: &S) -> Vec<A> {
+        (self.fold_fn)(source)
+    }
+
+    /// Check if the fold finds any values.
+    pub fn is_empty(&self, source: &S) -> bool {
+        self.fold_of(source).is_empty()
+    }
+
+    /// Count the number of focused values.
+    pub fn length(&self, source: &S) -> usize {
+        self.fold_of(source).len()
+    }
+
+    /// Find the first focused value, if any.
+    pub fn first(&self, source: &S) -> Option<A> {
+        self.fold_of(source).into_iter().next()
+    }
+}
+
+/// A Traversal focuses on zero or more values of type A within a structure S,
+/// supporting both reading and writing.
+///
+/// ## Traversal Laws
+///
+/// 1. **Identity**: `over_all(s, id) = s` — traversing with identity is no-op
+/// 2. **Composition**: `over_all(over_all(s, f), g) = over_all(s, g ∘ f)`
+///
+/// ## Usage
+///
+/// ```rust
+/// use orlando_transducers::optics::Traversal;
+///
+/// let each = Traversal::new(
+///     |v: &Vec<i32>| v.clone(),
+///     |v: &Vec<i32>, f: &dyn Fn(i32) -> i32| v.iter().map(|x| f(*x)).collect(),
+/// );
+///
+/// let data = vec![1, 2, 3];
+/// assert_eq!(each.get_all(&data), vec![1, 2, 3]);
+/// assert_eq!(each.over_all(&data, |x| x * 2), vec![2, 4, 6]);
+/// ```
+pub struct Traversal<S, A>
+where
+    S: Clone,
+    A: Clone,
+{
+    get_all_fn: FoldGetter<S, A>,
+    over_all_fn: TraversalSetter<S, A>,
+    _phantom: PhantomData<(S, A)>,
+}
+
+impl<S, A> Traversal<S, A>
+where
+    S: Clone,
+    A: Clone,
+{
+    /// Create a new traversal from get_all and over_all functions.
+    pub fn new<G, O>(get_all_fn: G, over_all_fn: O) -> Self
+    where
+        G: Fn(&S) -> Vec<A> + 'static,
+        O: Fn(&S, &dyn Fn(A) -> A) -> S + 'static,
+    {
+        Traversal {
+            get_all_fn: Box::new(get_all_fn),
+            over_all_fn: Box::new(over_all_fn),
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Extract all focused values from the structure.
+    pub fn get_all(&self, source: &S) -> Vec<A> {
+        (self.get_all_fn)(source)
+    }
+
+    /// Transform all focused values using a function.
+    pub fn over_all<F>(&self, source: &S, f: F) -> S
+    where
+        F: Fn(A) -> A,
+    {
+        (self.over_all_fn)(source, &f)
+    }
+
+    /// Set all focused values to a single value.
+    pub fn set_all(&self, source: &S, value: A) -> S
+    where
+        A: 'static,
+    {
+        let v = value;
+        (self.over_all_fn)(source, &move |_| v.clone())
+    }
+
+    /// Convert this Traversal into a read-only Fold.
+    pub fn as_fold(self) -> Fold<S, A>
+    where
+        S: 'static,
+        A: 'static,
+    {
+        Fold::new(move |s: &S| (self.get_all_fn)(s))
     }
 }
 
@@ -942,6 +1296,454 @@ mod tests {
                     address_lens.get_or(&user, default_addr),
                     user.address.clone().unwrap()
                 );
+            }
+        }
+    }
+
+    // ===== Prism tests =====
+
+    #[derive(Clone, Debug, PartialEq)]
+    enum Shape {
+        Circle(f64),
+        Rectangle(f64, f64),
+        Triangle(f64, f64, f64),
+    }
+
+    fn circle_prism() -> Prism<Shape, f64> {
+        Prism::new(
+            |s: &Shape| match s {
+                Shape::Circle(r) => Some(*r),
+                _ => None,
+            },
+            |r: f64| Shape::Circle(r),
+        )
+    }
+
+    fn rectangle_prism() -> Prism<Shape, (f64, f64)> {
+        Prism::new(
+            |s: &Shape| match s {
+                Shape::Rectangle(w, h) => Some((*w, *h)),
+                _ => None,
+            },
+            |(w, h): (f64, f64)| Shape::Rectangle(w, h),
+        )
+    }
+
+    #[test]
+    fn test_prism_preview_match() {
+        let prism = circle_prism();
+        assert_eq!(prism.preview(&Shape::Circle(5.0)), Some(5.0));
+    }
+
+    #[test]
+    fn test_prism_preview_no_match() {
+        let prism = circle_prism();
+        assert_eq!(prism.preview(&Shape::Rectangle(2.0, 3.0)), None);
+    }
+
+    #[test]
+    fn test_prism_review() {
+        let prism = circle_prism();
+        assert_eq!(prism.review(5.0), Shape::Circle(5.0));
+    }
+
+    #[test]
+    fn test_prism_over_match() {
+        let prism = circle_prism();
+        let shape = Shape::Circle(5.0);
+        let updated = prism.over(&shape, |r| r * 2.0);
+        assert_eq!(updated, Shape::Circle(10.0));
+    }
+
+    #[test]
+    fn test_prism_over_no_match() {
+        let prism = circle_prism();
+        let shape = Shape::Rectangle(2.0, 3.0);
+        let updated = prism.over(&shape, |r| r * 2.0);
+        assert_eq!(updated, shape); // unchanged
+    }
+
+    #[test]
+    fn test_prism_law_preview_review() {
+        // Law: preview(review(a)) = Some(a)
+        let prism = circle_prism();
+        let radius = 42.0;
+        assert_eq!(prism.preview(&prism.review(radius)), Some(radius));
+    }
+
+    #[test]
+    fn test_prism_law_review_preview() {
+        // Law: if preview(s) = Some(a), then review(a) = s
+        let prism = circle_prism();
+        let shape = Shape::Circle(7.5);
+        if let Some(a) = prism.preview(&shape) {
+            assert_eq!(prism.review(a), shape);
+        }
+    }
+
+    #[test]
+    fn test_prism_rectangle_variant() {
+        let prism = rectangle_prism();
+        assert_eq!(prism.preview(&Shape::Rectangle(2.0, 3.0)), Some((2.0, 3.0)));
+        assert_eq!(prism.preview(&Shape::Circle(1.0)), None);
+        assert_eq!(prism.review((4.0, 5.0)), Shape::Rectangle(4.0, 5.0));
+    }
+
+    // ===== Iso tests =====
+
+    fn celsius_fahrenheit_iso() -> Iso<f64, f64> {
+        Iso::new(
+            |c: &f64| *c * 9.0 / 5.0 + 32.0,
+            |f: f64| (f - 32.0) * 5.0 / 9.0,
+        )
+    }
+
+    #[test]
+    fn test_iso_to() {
+        let iso = celsius_fahrenheit_iso();
+        let f = iso.to(&100.0);
+        assert!((f - 212.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_iso_from() {
+        let iso = celsius_fahrenheit_iso();
+        let c = iso.from(32.0);
+        assert!((c - 0.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_iso_law_round_trip_forward() {
+        // Law: from(to(s)) = s
+        let iso = celsius_fahrenheit_iso();
+        let c = 37.5;
+        let back = iso.from(iso.to(&c));
+        assert!((back - c).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_iso_law_round_trip_backward() {
+        // Law: to(from(a)) = a
+        let iso = celsius_fahrenheit_iso();
+        let f = 98.6;
+        let back = iso.to(&iso.from(f));
+        assert!((back - f).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_iso_over() {
+        let iso = celsius_fahrenheit_iso();
+        // Double the Fahrenheit value, then convert back
+        let result = iso.over(&100.0, |f| f * 2.0);
+        // 100°C = 212°F, doubled = 424°F, back to °C = (424-32)*5/9 ≈ 217.78
+        let expected = (424.0 - 32.0) * 5.0 / 9.0;
+        assert!((result - expected).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_iso_reverse() {
+        let iso = celsius_fahrenheit_iso();
+        let reversed = iso.reverse();
+        // reversed.to should convert F→C
+        let c = reversed.to(&212.0);
+        assert!((c - 100.0).abs() < 1e-10);
+        // reversed.from should convert C→F
+        let f = reversed.from(0.0);
+        assert!((f - 32.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_iso_as_lens() {
+        let iso = celsius_fahrenheit_iso();
+        let lens = iso.as_lens();
+        let f = lens.get(&100.0);
+        assert!((f - 212.0).abs() < 1e-10);
+        let c = lens.set(&100.0, 32.0);
+        assert!((c - 0.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_iso_as_prism() {
+        let iso = celsius_fahrenheit_iso();
+        let prism = iso.as_prism();
+        // Prism preview always succeeds for an Iso
+        assert!(prism.preview(&100.0).is_some());
+        let f = prism.preview(&100.0).unwrap();
+        assert!((f - 212.0).abs() < 1e-10);
+    }
+
+    // Integer ↔ String iso for non-float testing
+    fn string_len_iso() -> Iso<String, usize> {
+        Iso::new(|s: &String| s.len(), |n: usize| "x".repeat(n))
+    }
+
+    #[test]
+    fn test_iso_string_len() {
+        let iso = string_len_iso();
+        assert_eq!(iso.to(&"hello".to_string()), 5);
+        assert_eq!(iso.from(3), "xxx".to_string());
+    }
+
+    // ===== Fold tests =====
+
+    #[test]
+    fn test_fold_basic() {
+        let even_fold =
+            Fold::new(|v: &Vec<i32>| v.iter().filter(|x| *x % 2 == 0).cloned().collect());
+        let data = vec![1, 2, 3, 4, 5, 6];
+        assert_eq!(even_fold.fold_of(&data), vec![2, 4, 6]);
+    }
+
+    #[test]
+    fn test_fold_empty() {
+        let even_fold =
+            Fold::new(|v: &Vec<i32>| v.iter().filter(|x| *x % 2 == 0).cloned().collect());
+        let data = vec![1, 3, 5];
+        assert_eq!(even_fold.fold_of(&data), Vec::<i32>::new());
+        assert!(even_fold.is_empty(&data));
+    }
+
+    #[test]
+    fn test_fold_length() {
+        let all_fold = Fold::new(|v: &Vec<i32>| v.clone());
+        let data = vec![1, 2, 3];
+        assert_eq!(all_fold.length(&data), 3);
+    }
+
+    #[test]
+    fn test_fold_first() {
+        let even_fold =
+            Fold::new(|v: &Vec<i32>| v.iter().filter(|x| *x % 2 == 0).cloned().collect());
+        assert_eq!(even_fold.first(&vec![1, 2, 3, 4]), Some(2));
+        assert_eq!(even_fold.first(&vec![1, 3, 5]), None);
+    }
+
+    #[test]
+    fn test_fold_on_struct() {
+        // Fold that extracts all names from a team
+        #[derive(Clone, Debug)]
+        struct Team {
+            members: Vec<String>,
+        }
+
+        let names_fold = Fold::new(|team: &Team| team.members.clone());
+        let team = Team {
+            members: vec!["Alice".to_string(), "Bob".to_string()],
+        };
+        assert_eq!(
+            names_fold.fold_of(&team),
+            vec!["Alice".to_string(), "Bob".to_string()]
+        );
+    }
+
+    // ===== Traversal tests =====
+
+    fn vec_traversal() -> Traversal<Vec<i32>, i32> {
+        Traversal::new(
+            |v: &Vec<i32>| v.clone(),
+            |v: &Vec<i32>, f: &dyn Fn(i32) -> i32| v.iter().map(|x| f(*x)).collect(),
+        )
+    }
+
+    #[test]
+    fn test_traversal_get_all() {
+        let trav = vec_traversal();
+        assert_eq!(trav.get_all(&vec![1, 2, 3]), vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_traversal_over_all() {
+        let trav = vec_traversal();
+        assert_eq!(trav.over_all(&vec![1, 2, 3], |x| x * 2), vec![2, 4, 6]);
+    }
+
+    #[test]
+    fn test_traversal_set_all() {
+        let trav = vec_traversal();
+        assert_eq!(trav.set_all(&vec![1, 2, 3], 0), vec![0, 0, 0]);
+    }
+
+    #[test]
+    fn test_traversal_law_identity() {
+        // Law: over_all(s, id) = s
+        let trav = vec_traversal();
+        let data = vec![1, 2, 3];
+        assert_eq!(trav.over_all(&data, |x| x), data);
+    }
+
+    #[test]
+    fn test_traversal_law_composition() {
+        // Law: over_all(over_all(s, f), g) = over_all(s, g ∘ f)
+        let trav = vec_traversal();
+        let data = vec![1, 2, 3];
+
+        let f = |x: i32| x * 2;
+        let g = |x: i32| x + 10;
+
+        let step_by_step = trav.over_all(&trav.over_all(&data, f), g);
+        let composed = trav.over_all(&data, |x| g(f(x)));
+
+        assert_eq!(step_by_step, composed);
+    }
+
+    #[test]
+    fn test_traversal_empty() {
+        let trav = vec_traversal();
+        let data: Vec<i32> = vec![];
+        assert_eq!(trav.get_all(&data), Vec::<i32>::new());
+        assert_eq!(trav.over_all(&data, |x| x * 2), Vec::<i32>::new());
+    }
+
+    #[test]
+    fn test_traversal_as_fold() {
+        let trav = vec_traversal();
+        let fold = trav.as_fold();
+        assert_eq!(fold.fold_of(&vec![1, 2, 3]), vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_traversal_on_struct() {
+        #[derive(Clone, Debug, PartialEq)]
+        struct Team {
+            members: Vec<String>,
+            name: String,
+        }
+
+        let members_traversal = Traversal::new(
+            |team: &Team| team.members.clone(),
+            |team: &Team, f: &dyn Fn(String) -> String| Team {
+                members: team.members.iter().map(|m| f(m.clone())).collect(),
+                name: team.name.clone(),
+            },
+        );
+
+        let team = Team {
+            members: vec!["alice".to_string(), "bob".to_string()],
+            name: "Dev".to_string(),
+        };
+
+        assert_eq!(
+            members_traversal.get_all(&team),
+            vec!["alice".to_string(), "bob".to_string()]
+        );
+
+        let updated = members_traversal.over_all(&team, |s| s.to_uppercase());
+        assert_eq!(
+            updated.members,
+            vec!["ALICE".to_string(), "BOB".to_string()]
+        );
+        assert_eq!(updated.name, "Dev"); // other fields unchanged
+    }
+
+    // Property-based tests for Prism laws
+    #[cfg(not(target_arch = "wasm32"))]
+    mod prism_laws_properties {
+        use super::*;
+
+        fn arbitrary_shape() -> impl Strategy<Value = Shape> {
+            prop_oneof![
+                (0.1f64..1000.0).prop_map(Shape::Circle),
+                (0.1f64..1000.0, 0.1f64..1000.0).prop_map(|(w, h)| Shape::Rectangle(w, h)),
+                (0.1f64..1000.0, 0.1f64..1000.0, 0.1f64..1000.0)
+                    .prop_map(|(a, b, c)| Shape::Triangle(a, b, c)),
+            ]
+        }
+
+        proptest! {
+            /// Prism law: preview(review(a)) = Some(a)
+            #[test]
+            fn prop_prism_preview_review(radius in 0.1f64..1000.0) {
+                let prism = circle_prism();
+                prop_assert_eq!(prism.preview(&prism.review(radius)), Some(radius));
+            }
+
+            /// Prism law: if preview(s) = Some(a), then review(a) = s
+            #[test]
+            fn prop_prism_review_preview(shape in arbitrary_shape()) {
+                let prism = circle_prism();
+                if let Some(a) = prism.preview(&shape) {
+                    prop_assert_eq!(prism.review(a), shape);
+                }
+            }
+
+            /// Prism over on non-matching variant is identity
+            #[test]
+            fn prop_prism_over_non_match(w in 0.1f64..1000.0, h in 0.1f64..1000.0) {
+                let prism = circle_prism();
+                let shape = Shape::Rectangle(w, h);
+                prop_assert_eq!(prism.over(&shape, |r| r * 2.0), shape);
+            }
+        }
+    }
+
+    // Property-based tests for Iso laws
+    #[cfg(not(target_arch = "wasm32"))]
+    mod iso_laws_properties {
+        use super::*;
+
+        proptest! {
+            /// Iso law: from(to(s)) = s (forward round-trip)
+            #[test]
+            fn prop_iso_round_trip_forward(c in -273.15f64..1000.0) {
+                let iso = celsius_fahrenheit_iso();
+                let back = iso.from(iso.to(&c));
+                prop_assert!((back - c).abs() < 1e-8);
+            }
+
+            /// Iso law: to(from(a)) = a (backward round-trip)
+            #[test]
+            fn prop_iso_round_trip_backward(f in -459.67f64..2000.0) {
+                let iso = celsius_fahrenheit_iso();
+                let back = iso.to(&iso.from(f));
+                prop_assert!((back - f).abs() < 1e-8);
+            }
+
+            /// Iso.over is equivalent to from(f(to(s)))
+            #[test]
+            fn prop_iso_over_equivalence(c in -273.15f64..1000.0) {
+                let iso = celsius_fahrenheit_iso();
+                let result_over = iso.over(&c, |f| f + 10.0);
+
+                let iso2 = celsius_fahrenheit_iso();
+                let result_manual = iso2.from(iso2.to(&c) + 10.0);
+
+                prop_assert!((result_over - result_manual).abs() < 1e-8);
+            }
+        }
+    }
+
+    // Property-based tests for Traversal laws
+    #[cfg(not(target_arch = "wasm32"))]
+    mod traversal_laws_properties {
+        use super::*;
+
+        proptest! {
+            /// Traversal law: over_all(s, id) = s
+            #[test]
+            fn prop_traversal_identity(data in proptest::collection::vec(any::<i32>(), 0..20)) {
+                let trav = vec_traversal();
+                prop_assert_eq!(trav.over_all(&data, |x| x), data);
+            }
+
+            /// Traversal law: over_all(over_all(s, f), g) = over_all(s, g ∘ f)
+            #[test]
+            fn prop_traversal_composition(data in proptest::collection::vec(-1000i32..1000, 0..20)) {
+                let trav = vec_traversal();
+                let f = |x: i32| x.saturating_mul(2);
+                let g = |x: i32| x.saturating_add(10);
+
+                let step_by_step = trav.over_all(&trav.over_all(&data, f), g);
+                let composed = trav.over_all(&data, |x| g(f(x)));
+
+                prop_assert_eq!(step_by_step, composed);
+            }
+
+            /// Traversal get_all length is preserved by over_all
+            #[test]
+            fn prop_traversal_preserves_length(data in proptest::collection::vec(-1000i32..1000, 0..20)) {
+                let trav = vec_traversal();
+                let updated = trav.over_all(&data, |x| x.saturating_mul(2));
+                prop_assert_eq!(trav.get_all(&updated).len(), trav.get_all(&data).len());
             }
         }
     }
