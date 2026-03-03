@@ -344,9 +344,8 @@ impl Pipeline {
     pub fn flatten(&self, depth: usize) -> Pipeline {
         let mut ops = self.operations.clone();
 
-        let flatmap_fn = Rc::new(move |val: JsValue| -> Vec<JsValue> {
-            flatten_value(val, depth)
-        }) as Rc<dyn Fn(JsValue) -> Vec<JsValue>>;
+        let flatmap_fn = Rc::new(move |val: JsValue| -> Vec<JsValue> { flatten_value(val, depth) })
+            as Rc<dyn Fn(JsValue) -> Vec<JsValue>>;
 
         ops.push(Operation::FlatMap(flatmap_fn));
         Pipeline { operations: ops }

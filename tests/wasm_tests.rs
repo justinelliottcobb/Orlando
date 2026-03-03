@@ -941,9 +941,7 @@ fn test_wasm_pipeline_compact_preserves_objects() {
     assert_eq!(result.length(), 2);
     // First element should be the object
     assert_eq!(
-        Reflect::get(&result.get(0), &"x".into())
-            .unwrap()
-            .as_f64(),
+        Reflect::get(&result.get(0), &"x".into()).unwrap().as_f64(),
         Some(1.0)
     );
     assert_eq!(result.get(1).as_string(), Some("text".to_string()));
