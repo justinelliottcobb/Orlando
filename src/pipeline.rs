@@ -313,7 +313,7 @@ impl Pipeline {
                 && !val.is_null()
                 && !val.is_undefined()
                 && val.as_f64() != Some(0.0)
-                && val.as_string().map_or(true, |s| !s.is_empty())
+                && val.as_string().is_none_or(|s| !s.is_empty())
                 && !is_nan(val)
         }) as Rc<dyn Fn(&JsValue) -> bool>;
 
