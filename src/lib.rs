@@ -83,8 +83,10 @@ pub mod collectors;
 pub mod geometric_optics;
 pub mod logic;
 pub mod optics;
+pub mod signal;
 pub mod simd;
 pub mod step;
+pub mod stream;
 pub mod transducer;
 pub mod transforms;
 
