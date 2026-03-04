@@ -116,13 +116,16 @@ pub use collectors::{
 pub use logic::{all_pass, any_pass, both, complement, either, IfElse, Unless, When};
 
 // Re-export optics
-pub use optics::{Lens, Optional};
+pub use optics::{Fold, Iso, Lens, Optional, Prism, Traversal};
 
 #[cfg(target_arch = "wasm32")]
 pub use pipeline::Pipeline;
 
 #[cfg(target_arch = "wasm32")]
-pub use optics_wasm::{lens, lens_path, optional, JsLens, JsOptional};
+pub use optics_wasm::{
+    fold, iso, lens, lens_path, optional, prism, traversal, JsFold, JsIso, JsLens, JsOptional,
+    JsPrism, JsTraversal,
+};
 
 // WASM initialization
 #[cfg(target_arch = "wasm32")]

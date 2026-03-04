@@ -688,3 +688,150 @@ fn test_complex_logic_pipeline() {
     // Filter abs > 5: [-60, -12, 10, 13, 60]
     assert_eq!(result, vec![-60, -12, 10, 13, 60]);
 }
+
+// ========================================
+// Optics Integration Tests
+// ========================================
+
+#[test]
+fn test_prism_with_enum_pipeline() {
+    use orlando_transducers::optics::Prism;
+
+    #[derive(Clone, Debug, PartialEq)]
+    enum Value {
+        Int(i32),
+        Str(String),
+    }
+
+    let int_prism = Prism::new(
+        |v: &Value| match v {
+            Value::Int(n) => Some(*n),
+            _ => None,
+        },
+        |n: i32| Value::Int(n),
+    );
+
+    // Use prism to extract and transform
+    let values = [Value::Int(1), Value::Str("hi".into()), Value::Int(3)];
+    let doubled: Vec<Value> = values
+        .iter()
+        .map(|v| int_prism.over(v, |n| n * 2))
+        .collect();
+
+    assert_eq!(
+        doubled,
+        vec![Value::Int(2), Value::Str("hi".into()), Value::Int(6)]
+    );
+}
+
+#[test]
+fn test_iso_bidirectional() {
+    use orlando_transducers::optics::Iso;
+
+    // Radians ↔ Degrees
+    let rad_deg = Iso::new(
+        |r: &f64| r * 180.0 / std::f64::consts::PI,
+        |d: f64| d * std::f64::consts::PI / 180.0,
+    );
+
+    let pi = std::f64::consts::PI;
+    let degrees = rad_deg.to(&pi);
+    assert!((degrees - 180.0).abs() < 1e-10);
+
+    let back = rad_deg.from(degrees);
+    assert!((back - pi).abs() < 1e-10);
+
+    // Reverse
+    let deg_rad = rad_deg.reverse();
+    let radians = deg_rad.to(&180.0);
+    assert!((radians - pi).abs() < 1e-10);
+}
+
+#[test]
+fn test_fold_aggregate() {
+    use orlando_transducers::optics::Fold;
+
+    #[derive(Clone, Debug)]
+    struct Order {
+        items: Vec<f64>,
+    }
+
+    let prices_fold = Fold::new(|order: &Order| order.items.clone());
+
+    let order = Order {
+        items: vec![9.99, 24.50, 3.75],
+    };
+
+    let prices = prices_fold.fold_of(&order);
+    let total: f64 = prices.iter().sum();
+    assert!((total - 38.24).abs() < 1e-10);
+    assert_eq!(prices_fold.length(&order), 3);
+}
+
+#[test]
+fn test_traversal_with_nested_structs() {
+    use orlando_transducers::optics::Traversal;
+
+    #[derive(Clone, Debug, PartialEq)]
+    struct Config {
+        values: Vec<i32>,
+        name: String,
+    }
+
+    let values_traversal = Traversal::new(
+        |cfg: &Config| cfg.values.clone(),
+        |cfg: &Config, f: &dyn Fn(i32) -> i32| Config {
+            values: cfg.values.iter().map(|x| f(*x)).collect(),
+            name: cfg.name.clone(),
+        },
+    );
+
+    let cfg = Config {
+        values: vec![1, 2, 3],
+        name: "test".into(),
+    };
+
+    // Transform all values
+    let updated = values_traversal.over_all(&cfg, |x| x * 10);
+    assert_eq!(updated.values, vec![10, 20, 30]);
+    assert_eq!(updated.name, "test");
+
+    // Set all values
+    let zeroed = values_traversal.set_all(&cfg, 0);
+    assert_eq!(zeroed.values, vec![0, 0, 0]);
+
+    // Convert to fold
+    let fold = values_traversal.as_fold();
+    assert_eq!(fold.fold_of(&cfg), vec![1, 2, 3]);
+}
+
+#[test]
+fn test_iso_as_lens_composition() {
+    use orlando_transducers::optics::{Iso, Lens};
+
+    #[derive(Clone, Debug, PartialEq)]
+    struct Wrapper {
+        inner: f64,
+    }
+
+    let inner_lens = Lens::new(
+        |w: &Wrapper| w.inner,
+        |_w: &Wrapper, v: f64| Wrapper { inner: v },
+    );
+
+    // Celsius value inside a wrapper
+    let celsius_fahrenheit = Iso::new(
+        |c: &f64| *c * 9.0 / 5.0 + 32.0,
+        |f: f64| (f - 32.0) * 5.0 / 9.0,
+    );
+
+    // Compose: wrapper → inner (lens) → fahrenheit (iso as lens)
+    let wrapper_to_f = inner_lens.compose(celsius_fahrenheit.as_lens());
+
+    let w = Wrapper { inner: 100.0 };
+    let f = wrapper_to_f.get(&w);
+    assert!((f - 212.0).abs() < 1e-10);
+
+    let updated = wrapper_to_f.set(&w, 32.0);
+    assert!((updated.inner - 0.0).abs() < 1e-10);
+}
