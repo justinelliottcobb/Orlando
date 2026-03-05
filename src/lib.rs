@@ -81,6 +81,7 @@
 
 pub mod collectors;
 pub mod geometric_optics;
+pub mod iter_ext;
 pub mod logic;
 pub mod optics;
 pub mod signal;
