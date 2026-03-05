@@ -36,8 +36,8 @@ type JsOverAll = Rc<dyn Fn(&JsValue, &Function) -> JsValue>;
 /// ```
 #[wasm_bindgen]
 pub struct JsLens {
-    get_fn: JsGetter,
-    set_fn: JsSetter,
+    pub(crate) get_fn: JsGetter,
+    pub(crate) set_fn: JsSetter,
 }
 
 #[wasm_bindgen]
@@ -234,8 +234,8 @@ pub fn lens_path(path: &JsValue) -> Result<JsLens, JsValue> {
 /// ```
 #[wasm_bindgen]
 pub struct JsOptional {
-    get_fn: JsGetter,
-    set_fn: JsSetter,
+    pub(crate) get_fn: JsGetter,
+    pub(crate) set_fn: JsSetter,
 }
 
 #[wasm_bindgen]

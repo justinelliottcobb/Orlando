@@ -408,6 +408,140 @@ impl Pipeline {
         Pipeline { operations: ops }
     }
 
+    /// Apply a lens to extract the focused value from each element.
+    ///
+    /// Equivalent to `.map(x => myLens.get(x))` but avoids the JS function call overhead.
+    ///
+    /// # Arguments
+    ///
+    /// * `optic` - A JsLens to apply
+    ///
+    /// # Examples (JavaScript)
+    ///
+    /// ```javascript
+    /// const nameLens = lens('name');
+    /// const users = [{ name: "Alice" }, { name: "Bob" }];
+    /// const names = new Pipeline().viewLens(nameLens).toArray(users);
+    /// // names: ["Alice", "Bob"]
+    /// ```
+    #[wasm_bindgen(js_name = viewLens)]
+    pub fn view_lens(&self, optic: &crate::optics_wasm::JsLens) -> Pipeline {
+        let get_fn = optic.get_fn.clone();
+        let mut ops = self.operations.clone();
+
+        let map_fn = Rc::new(move |val: JsValue| -> JsValue { get_fn(&val) })
+            as Rc<dyn Fn(JsValue) -> JsValue>;
+
+        ops.push(Operation::Map(map_fn));
+        Pipeline { operations: ops }
+    }
+
+    /// Transform each element's focused value through a lens using a function.
+    ///
+    /// Equivalent to `.map(x => myLens.over(x, fn))`.
+    ///
+    /// # Arguments
+    ///
+    /// * `optic` - A JsLens to apply
+    /// * `f` - A JavaScript function to transform the focused value
+    ///
+    /// # Examples (JavaScript)
+    ///
+    /// ```javascript
+    /// const priceLens = lens('price');
+    /// const items = [{ name: "A", price: 10 }, { name: "B", price: 20 }];
+    /// const discounted = new Pipeline()
+    ///   .overLens(priceLens, p => p * 0.9)
+    ///   .toArray(items);
+    /// // [{ name: "A", price: 9 }, { name: "B", price: 18 }]
+    /// ```
+    #[wasm_bindgen(js_name = overLens)]
+    pub fn over_lens(&self, optic: &crate::optics_wasm::JsLens, f: &Function) -> Pipeline {
+        let get_fn = optic.get_fn.clone();
+        let set_fn = optic.set_fn.clone();
+        let f = f.clone();
+        let mut ops = self.operations.clone();
+
+        let map_fn = Rc::new(move |val: JsValue| -> JsValue {
+            let current = get_fn(&val);
+            let this = JsValue::null();
+            let updated = f.call1(&this, &current).unwrap_or_else(|_| current.clone());
+            set_fn(&val, updated)
+        }) as Rc<dyn Fn(JsValue) -> JsValue>;
+
+        ops.push(Operation::Map(map_fn));
+        Pipeline { operations: ops }
+    }
+
+    /// Filter elements based on a predicate applied to the focused value of a lens.
+    ///
+    /// Equivalent to `.filter(x => pred(myLens.get(x)))`.
+    ///
+    /// # Arguments
+    ///
+    /// * `optic` - A JsLens to extract the value to test
+    /// * `pred` - A JavaScript predicate function
+    ///
+    /// # Examples (JavaScript)
+    ///
+    /// ```javascript
+    /// const ageLens = lens('age');
+    /// const users = [{ name: "Alice", age: 25 }, { name: "Bob", age: 17 }];
+    /// const adults = new Pipeline()
+    ///   .filterLens(ageLens, a => a >= 18)
+    ///   .toArray(users);
+    /// // [{ name: "Alice", age: 25 }]
+    /// ```
+    #[wasm_bindgen(js_name = filterLens)]
+    pub fn filter_lens(&self, optic: &crate::optics_wasm::JsLens, pred: &Function) -> Pipeline {
+        let get_fn = optic.get_fn.clone();
+        let pred = pred.clone();
+        let mut ops = self.operations.clone();
+
+        let filter_fn = Rc::new(move |val: &JsValue| -> bool {
+            let focused = get_fn(val);
+            let this = JsValue::null();
+            match pred.call1(&this, &focused) {
+                Ok(result) => result.as_bool().unwrap_or(false),
+                Err(_) => false,
+            }
+        }) as Rc<dyn Fn(&JsValue) -> bool>;
+
+        ops.push(Operation::Filter(filter_fn));
+        Pipeline { operations: ops }
+    }
+
+    /// Set the focused value of a lens on every element.
+    ///
+    /// Equivalent to `.map(x => myLens.set(x, value))`.
+    ///
+    /// # Arguments
+    ///
+    /// * `optic` - A JsLens to apply
+    /// * `value` - The value to set
+    ///
+    /// # Examples (JavaScript)
+    ///
+    /// ```javascript
+    /// const statusLens = lens('status');
+    /// const items = [{ id: 1, status: "draft" }, { id: 2, status: "draft" }];
+    /// const published = new Pipeline()
+    ///   .setLens(statusLens, "published")
+    ///   .toArray(items);
+    /// // [{ id: 1, status: "published" }, { id: 2, status: "published" }]
+    /// ```
+    #[wasm_bindgen(js_name = setLens)]
+    pub fn set_lens(&self, optic: &crate::optics_wasm::JsLens, value: JsValue) -> Pipeline {
+        let set_fn = optic.set_fn.clone();
+        let mut ops = self.operations.clone();
+
+        let map_fn = Rc::new(move |val: JsValue| -> JsValue { set_fn(&val, value.clone()) })
+            as Rc<dyn Fn(JsValue) -> JsValue>;
+
+        ops.push(Operation::Map(map_fn));
+        Pipeline { operations: ops }
+    }
+
     /// Execute the pipeline and collect results into an array.
     ///
     /// # Arguments
