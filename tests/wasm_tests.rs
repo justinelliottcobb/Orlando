@@ -1218,3 +1218,121 @@ fn test_wasm_pipeline_project_then_where_matches() {
     // age should not be present since we projected it out
     assert!(Reflect::get(&r, &"age".into()).unwrap().is_undefined());
 }
+
+// ===== Phase 6c: Optics-Pipeline Integration Tests =====
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_view_lens() {
+    let name_lens = orlando_transducers::lens("name");
+    let pipeline = Pipeline::new().view_lens(&name_lens);
+
+    let source = js_sys::Array::new();
+    let obj1 = js_sys::Object::new();
+    js_sys::Reflect::set(&obj1, &"name".into(), &"Alice".into()).unwrap();
+    let obj2 = js_sys::Object::new();
+    js_sys::Reflect::set(&obj2, &"name".into(), &"Bob".into()).unwrap();
+    source.push(&obj1);
+    source.push(&obj2);
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 2);
+    assert_eq!(result.get(0).as_string(), Some("Alice".to_string()));
+    assert_eq!(result.get(1).as_string(), Some("Bob".to_string()));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_over_lens() {
+    let price_lens = orlando_transducers::lens("price");
+
+    // Create a JS function that multiplies by 0.9
+    let discount_fn = js_sys::Function::new_with_args("p", "return p * 0.9");
+    let pipeline = Pipeline::new().over_lens(&price_lens, &discount_fn);
+
+    let source = js_sys::Array::new();
+    let item = js_sys::Object::new();
+    js_sys::Reflect::set(&item, &"name".into(), &"Widget".into()).unwrap();
+    js_sys::Reflect::set(
+        &item,
+        &"price".into(),
+        &wasm_bindgen::JsValue::from_f64(100.0),
+    )
+    .unwrap();
+    source.push(&item);
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 1);
+    let result_obj = result.get(0);
+    let price = js_sys::Reflect::get(&result_obj, &"price".into()).unwrap();
+    assert!((price.as_f64().unwrap() - 90.0).abs() < 1e-10);
+    // Original name preserved
+    let name = js_sys::Reflect::get(&result_obj, &"name".into()).unwrap();
+    assert_eq!(name.as_string(), Some("Widget".to_string()));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_filter_lens() {
+    let age_lens = orlando_transducers::lens("age");
+    let adult_fn = js_sys::Function::new_with_args("a", "return a >= 18");
+    let pipeline = Pipeline::new().filter_lens(&age_lens, &adult_fn);
+
+    let source = js_sys::Array::new();
+    for (name, age) in &[("Alice", 25.0), ("Bob", 17.0), ("Charlie", 30.0)] {
+        let obj = js_sys::Object::new();
+        js_sys::Reflect::set(&obj, &"name".into(), &(*name).into()).unwrap();
+        js_sys::Reflect::set(&obj, &"age".into(), &wasm_bindgen::JsValue::from_f64(*age)).unwrap();
+        source.push(&obj);
+    }
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 2);
+
+    let name0 = js_sys::Reflect::get(&result.get(0), &"name".into()).unwrap();
+    let name1 = js_sys::Reflect::get(&result.get(1), &"name".into()).unwrap();
+    assert_eq!(name0.as_string(), Some("Alice".to_string()));
+    assert_eq!(name1.as_string(), Some("Charlie".to_string()));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_set_lens() {
+    let status_lens = orlando_transducers::lens("status");
+    let pipeline = Pipeline::new().set_lens(&status_lens, "published".into());
+
+    let source = js_sys::Array::new();
+    let item1 = js_sys::Object::new();
+    js_sys::Reflect::set(&item1, &"id".into(), &wasm_bindgen::JsValue::from_f64(1.0)).unwrap();
+    js_sys::Reflect::set(&item1, &"status".into(), &"draft".into()).unwrap();
+    let item2 = js_sys::Object::new();
+    js_sys::Reflect::set(&item2, &"id".into(), &wasm_bindgen::JsValue::from_f64(2.0)).unwrap();
+    js_sys::Reflect::set(&item2, &"status".into(), &"draft".into()).unwrap();
+    source.push(&item1);
+    source.push(&item2);
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 2);
+    let status0 = js_sys::Reflect::get(&result.get(0), &"status".into()).unwrap();
+    let status1 = js_sys::Reflect::get(&result.get(1), &"status".into()).unwrap();
+    assert_eq!(status0.as_string(), Some("published".to_string()));
+    assert_eq!(status1.as_string(), Some("published".to_string()));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_lens_composition() {
+    // Chain: viewLens to extract, then filter, then take
+    let name_lens = orlando_transducers::lens("name");
+    let pipeline = Pipeline::new()
+        .view_lens(&name_lens)
+        .filter(&js_sys::Function::new_with_args("s", "return s.length > 3"))
+        .take(2);
+
+    let source = js_sys::Array::new();
+    for name in &["Al", "Alice", "Bob", "Charlie", "Ed"] {
+        let obj = js_sys::Object::new();
+        js_sys::Reflect::set(&obj, &"name".into(), &(*name).into()).unwrap();
+        source.push(&obj);
+    }
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 2);
+    assert_eq!(result.get(0).as_string(), Some("Alice".to_string()));
+    assert_eq!(result.get(1).as_string(), Some("Charlie".to_string()));
+}
