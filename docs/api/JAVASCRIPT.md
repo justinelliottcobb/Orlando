@@ -2752,115 +2752,377 @@ const addr: any = addressLens.getOr(user, { city: 'Unknown', zip: '00000' });
 
 ## Advanced Optics
 
+Orlando provides a complete optics hierarchy beyond basic lenses. Each optic type is designed for a specific data access pattern.
+
 ### Prism
 
-A Prism focuses on a value that may or may not exist within a sum type (tagged union, enum variant).
+A Prism focuses on a value that may or may not exist within a sum type (tagged union, enum variant). Use prisms when your data has multiple possible shapes and you want to safely access one variant.
 
 #### `prism(matchFn, buildFn)`
 
+Create a prism from match and build functions.
+
+```typescript
+prism(matchFn: (source: any) => any | undefined, buildFn: (value: any) => any): JsPrism
+```
+
+**Parameters:**
+- `matchFn` - A function that extracts the variant's value, or returns `undefined` if it doesn't match
+- `buildFn` - A function that constructs the sum type from a value
+
+**Example:**
 ```javascript
 import { prism } from 'orlando-transducers';
 
-// Prism for extracting numbers from a mixed-type wrapper
-const numPrism = prism(
-  val => typeof val === 'number' ? val : undefined,  // match
-  n => n                                               // build
+// Prism for Result-like tagged unions
+const okPrism = prism(
+  obj => obj.tag === 'ok' ? obj.value : undefined,
+  value => ({ tag: 'ok', value })
 );
 
-console.log(numPrism.preview(42));        // 42
-console.log(numPrism.preview("hello"));   // undefined
-console.log(numPrism.review(99));         // 99
+okPrism.preview({ tag: 'ok', value: 42 });     // 42
+okPrism.preview({ tag: 'err', error: 'x' });   // undefined
+okPrism.review(99);                             // { tag: 'ok', value: 99 }
+
+// over only applies when the prism matches
+okPrism.over({ tag: 'ok', value: 10 }, x => x * 2);
+// { tag: 'ok', value: 20 }
+
+okPrism.over({ tag: 'err', error: 'x' }, x => x * 2);
+// { tag: 'err', error: 'x' } (unchanged)
 ```
 
-**Methods:**
-- `preview(source)` - Extract the value if it matches, otherwise `undefined`
-- `review(value)` - Construct a new value from the focused type
+**Use cases:**
+- Accessing specific variants in tagged unions
+- Safely transforming optional/nullable structures
+- Pattern matching on discriminated types
+
+---
+
+#### Prism Methods
+
+##### `preview(source)`
+
+Try to extract the focused variant from the source.
+
+```typescript
+preview(source: any): any | undefined
+```
+
+Returns the focused value if the prism matches, or `undefined` if it doesn't.
+
+---
+
+##### `review(value)`
+
+Construct the sum type from the focused value.
+
+```typescript
+review(value: any): any
+```
+
+---
+
+##### `over(source, fn)`
+
+Transform the focused variant using a function. If the prism doesn't match, returns the source unchanged.
+
+```typescript
+over(source: any, fn: (value: any) => any): any
+```
+
+---
 
 ### Iso
 
-An Iso (isomorphism) represents a lossless bidirectional conversion.
+An Iso (isomorphism) represents a lossless bidirectional conversion between two representations. The conversion must be invertible: `from(to(x)) === x` and `to(from(y)) === y`.
 
 #### `iso(toFn, fromFn)`
 
+Create an isomorphism from a pair of inverse functions.
+
+```typescript
+iso(toFn: (source: any) => any, fromFn: (target: any) => any): JsIso
+```
+
+**Parameters:**
+- `toFn` - A function that converts source → target
+- `fromFn` - A function that converts target → source (must be the inverse of `toFn`)
+
+**Example:**
 ```javascript
 import { iso } from 'orlando-transducers';
 
 // Celsius ↔ Fahrenheit
 const tempIso = iso(
-  c => c * 9 / 5 + 32,   // to: Celsius → Fahrenheit
+  c => c * 9 / 5 + 32,    // to: Celsius → Fahrenheit
   f => (f - 32) * 5 / 9   // from: Fahrenheit → Celsius
 );
 
-console.log(tempIso.forward(100));  // 212
-console.log(tempIso.backward(32));  // 0
+tempIso.to(100);    // 212
+tempIso.from(32);   // 0
+
+// over: convert, transform in target space, convert back
+tempIso.over(0, f => f + 10);  // ~5.56 (add 10°F, result in Celsius)
+
+// Reverse the iso
+const fahrenheitCelsius = tempIso.reverse();
+fahrenheitCelsius.to(212);  // 100
 ```
 
-**Methods:**
-- `forward(source)` - Convert S → A
-- `backward(value)` - Convert A → S
+**Use cases:**
+- Unit conversions (temperature, currency, distance)
+- Encoding/decoding (JSON ↔ object, base64 ↔ binary)
+- Newtype wrappers
+
+---
+
+#### Iso Methods
+
+##### `to(source)`
+
+Convert from source representation to target.
+
+```typescript
+to(source: any): any
+```
+
+---
+
+##### `from(value)`
+
+Convert from target representation back to source.
+
+```typescript
+from(value: any): any
+```
+
+---
+
+##### `over(source, fn)`
+
+Transform via the isomorphism: convert to target, apply `fn`, convert back.
+
+```typescript
+over(source: any, fn: (target: any) => any): any
+```
+
+---
+
+##### `reverse()`
+
+Return a new Iso with the `to` and `from` directions swapped.
+
+```typescript
+reverse(): JsIso
+```
+
+---
 
 ### Fold
 
-A Fold is a read-only optic that extracts multiple values.
+A Fold is a read-only optic that extracts zero or more values from a structure. Unlike a Lens (which focuses on exactly one value) or a Traversal (which can also write), a Fold is purely for reading.
 
 #### `fold(extractFn)`
 
+Create a fold from an extraction function.
+
+```typescript
+fold(extractFn: (source: any) => any[]): JsFold
+```
+
+**Parameters:**
+- `extractFn` - A function that returns an array of extracted values from the source
+
+**Example:**
 ```javascript
 import { fold } from 'orlando-transducers';
 
 // Extract all values from an object
 const valuesFold = fold(obj => Object.values(obj));
 
-console.log(valuesFold.getAll({ a: 1, b: 2, c: 3 }));  // [1, 2, 3]
+valuesFold.foldOf({ a: 1, b: 2, c: 3 });  // [1, 2, 3]
+valuesFold.length({ a: 1, b: 2, c: 3 });   // 3
+valuesFold.first({ a: 1, b: 2, c: 3 });    // 1
+valuesFold.isEmpty({});                      // true
+
+// Fold over nested arrays
+const flatFold = fold(arr => arr.flat());
+flatFold.foldOf([[1, 2], [3, 4]]);  // [1, 2, 3, 4]
 ```
 
-**Methods:**
-- `getAll(source)` - Extract all focused values as an array
+**Use cases:**
+- Aggregating values from complex structures
+- Counting elements matching a pattern
+- Extracting the first match from a collection
+
+---
+
+#### Fold Methods
+
+##### `foldOf(source)`
+
+Extract all focused values from the source.
+
+```typescript
+foldOf(source: any): any[]
+```
+
+---
+
+##### `isEmpty(source)`
+
+Check whether the fold extracts zero values.
+
+```typescript
+isEmpty(source: any): boolean
+```
+
+---
+
+##### `length(source)`
+
+Count how many values the fold extracts.
+
+```typescript
+length(source: any): number
+```
+
+---
+
+##### `first(source)`
+
+Extract the first focused value, or `undefined` if empty.
+
+```typescript
+first(source: any): any | undefined
+```
+
+---
 
 ### Traversal
 
-A Traversal focuses on multiple values within a structure, supporting both read and write.
+A Traversal focuses on multiple values within a structure, supporting both read and write. It generalizes a Lens to work over collections.
 
 #### `traversal(getAllFn, overAllFn)`
 
+Create a traversal from get-all and over-all functions.
+
+```typescript
+traversal(
+  getAllFn: (source: any) => any[],
+  overAllFn: (source: any, fn: (value: any) => any) => any
+): JsTraversal
+```
+
+**Parameters:**
+- `getAllFn` - A function that extracts all focused values from the source
+- `overAllFn` - A function that applies a transformation to all focused values and returns a new structure
+
+**Example:**
 ```javascript
 import { traversal } from 'orlando-transducers';
 
 // Traversal over array elements
 const elemTraversal = traversal(
-  arr => arr,                              // getAll
-  (arr, fn) => arr.map(v => fn(v))        // overAll
+  arr => arr,
+  (arr, fn) => arr.map(v => fn(v))
 );
 
 const nums = [1, 2, 3, 4];
-console.log(elemTraversal.getAll(nums));                  // [1, 2, 3, 4]
-console.log(elemTraversal.setAll(nums, 0));               // [0, 0, 0, 0]
-console.log(elemTraversal.overAll(nums, x => x * 10));    // [10, 20, 30, 40]
+elemTraversal.getAll(nums);                  // [1, 2, 3, 4]
+elemTraversal.setAll(nums, 0);               // [0, 0, 0, 0]
+elemTraversal.overAll(nums, x => x * 10);    // [10, 20, 30, 40]
+
+// Traversal over object values
+const valuesTraversal = traversal(
+  obj => Object.values(obj),
+  (obj, fn) => Object.fromEntries(
+    Object.entries(obj).map(([k, v]) => [k, fn(v)])
+  )
+);
+
+valuesTraversal.getAll({ x: 1, y: 2 });               // [1, 2]
+valuesTraversal.overAll({ x: 1, y: 2 }, n => n + 10);  // { x: 11, y: 12 }
 ```
 
-**Methods:**
-- `getAll(source)` - Get all focused values
-- `setAll(source, value)` - Set all focused values
-- `overAll(source, fn)` - Transform all focused values
+**Use cases:**
+- Transforming all elements in a collection
+- Updating nested arrays within objects
+- Batch modifications to homogeneous structures
+
+---
+
+#### Traversal Methods
+
+##### `getAll(source)`
+
+Extract all focused values.
+
+```typescript
+getAll(source: any): any[]
+```
+
+---
+
+##### `setAll(source, value)`
+
+Replace all focused values with a single value.
+
+```typescript
+setAll(source: any, value: any): any
+```
+
+---
+
+##### `overAll(source, fn)`
+
+Transform all focused values using a function.
+
+```typescript
+overAll(source: any, fn: (value: any) => any): any
+```
 
 ---
 
 ## Pipeline Enhancements
 
+JavaScript-specific convenience methods for common data transformation patterns.
+
 ### `pluck(key)`
 
-Extract a single property from each object in the stream.
+Extract a single property from each object in the stream. Equivalent to `.map(x => x[key])`.
 
+```typescript
+pluck(key: string): Pipeline
+```
+
+**Example:**
 ```javascript
 const pipeline = new Pipeline().pluck('name');
-pipeline.toArray([{ name: 'Alice' }, { name: 'Bob' }]);
+pipeline.toArray([
+  { name: 'Alice', age: 30 },
+  { name: 'Bob', age: 25 }
+]);
 // ['Alice', 'Bob']
 ```
 
+**Use cases:**
+- Extracting IDs from objects
+- Pulling out a single field for aggregation
+- Quick property access in data pipelines
+
+---
+
 ### `project(keys)`
 
-Extract multiple properties from each object.
+Extract multiple properties from each object, creating new objects with only those keys.
 
+```typescript
+project(keys: string[]): Pipeline
+```
+
+**Example:**
 ```javascript
 const pipeline = new Pipeline().project(['id', 'name']);
 pipeline.toArray([
@@ -2870,20 +3132,49 @@ pipeline.toArray([
 // [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }]
 ```
 
+**Use cases:**
+- Selecting fields for API responses
+- Reducing object size before serialization
+- Creating view models from full data objects
+
+---
+
 ### `compact()`
 
-Remove all falsy values (`null`, `undefined`, `false`, `0`, `NaN`, `''`).
+Remove all falsy values from the stream.
 
+```typescript
+compact(): Pipeline
+```
+
+Filters out: `null`, `undefined`, `false`, `0`, `NaN`, and `''` (empty string).
+
+**Example:**
 ```javascript
 const pipeline = new Pipeline().compact();
 pipeline.toArray([1, null, 'hello', undefined, 0, false, '', 42]);
 // [1, 'hello', 42]
 ```
 
+**Use cases:**
+- Cleaning up sparse data
+- Removing empty/null entries from API responses
+- Filtering out zero values from numeric data
+
+---
+
 ### `flatten(depth)`
 
 Flatten nested arrays to a given depth.
 
+```typescript
+flatten(depth: number): Pipeline
+```
+
+**Parameters:**
+- `depth` - Maximum depth to flatten. Use `1` for a single level.
+
+**Example:**
 ```javascript
 const pipeline = new Pipeline().flatten(1);
 pipeline.toArray([[1, 2], [3, [4, 5]], [6]]);
@@ -2894,10 +3185,25 @@ deep.toArray([[1, 2], [3, [4, 5]], [6]]);
 // [1, 2, 3, 4, 5, 6]
 ```
 
+**Use cases:**
+- Normalizing nested data structures
+- Flattening grouped results
+- Processing tree-like data
+
+---
+
 ### `whereMatches(spec)`
 
-Filter objects that match all properties in a spec object.
+Filter objects that match all properties in a spec object. Uses strict equality for comparison.
 
+```typescript
+whereMatches(spec: object): Pipeline
+```
+
+**Parameters:**
+- `spec` - A JavaScript object whose key-value pairs must all match
+
+**Example:**
 ```javascript
 const pipeline = new Pipeline().whereMatches({ active: true, role: 'admin' });
 pipeline.toArray([
@@ -2908,28 +3214,55 @@ pipeline.toArray([
 // [{ name: 'Alice', active: true, role: 'admin' }]
 ```
 
+**Use cases:**
+- Filtering records by multiple criteria
+- Pattern matching on object shapes
+- Declarative query-like filtering
+
 ---
 
 ## Optics-Pipeline Integration
 
-Use lenses directly within pipelines for focused data transformations.
+Use lenses directly within pipelines for focused, composable data transformations. These methods avoid the overhead of creating intermediate JavaScript functions.
 
 ### `viewLens(lens)`
 
-Apply a lens to extract the focused value from each element.
+Apply a lens to extract the focused value from each element. Equivalent to `.map(x => myLens.get(x))`.
 
+```typescript
+viewLens(lens: JsLens): Pipeline
+```
+
+**Example:**
 ```javascript
+import { lens, Pipeline } from 'orlando-transducers';
+
 const nameLens = lens('name');
 const pipeline = new Pipeline().viewLens(nameLens);
-pipeline.toArray([{ name: 'Alice' }, { name: 'Bob' }]);
+pipeline.toArray([{ name: 'Alice', age: 30 }, { name: 'Bob', age: 25 }]);
 // ['Alice', 'Bob']
+
+// Compose with other pipeline operations
+const pipeline2 = new Pipeline()
+  .viewLens(nameLens)
+  .filter(name => name.length > 3)
+  .take(2);
 ```
+
+---
 
 ### `overLens(lens, fn)`
 
-Transform each element's focused value through a lens.
+Transform each element's focused value through a lens. The rest of each object is preserved unchanged.
 
+```typescript
+overLens(lens: JsLens, fn: (value: any) => any): Pipeline
+```
+
+**Example:**
 ```javascript
+import { lens, Pipeline } from 'orlando-transducers';
+
 const priceLens = lens('price');
 const pipeline = new Pipeline().overLens(priceLens, p => p * 0.9);
 pipeline.toArray([
@@ -2939,11 +3272,20 @@ pipeline.toArray([
 // [{ name: 'Widget', price: 90 }, { name: 'Gadget', price: 180 }]
 ```
 
+---
+
 ### `filterLens(lens, pred)`
 
-Filter elements based on a predicate applied to the focused value.
+Filter elements based on a predicate applied to the lens-focused value. Equivalent to `.filter(x => pred(myLens.get(x)))`.
 
+```typescript
+filterLens(lens: JsLens, pred: (value: any) => boolean): Pipeline
+```
+
+**Example:**
 ```javascript
+import { lens, Pipeline } from 'orlando-transducers';
+
 const ageLens = lens('age');
 const pipeline = new Pipeline().filterLens(ageLens, a => a >= 18);
 pipeline.toArray([
@@ -2954,11 +3296,20 @@ pipeline.toArray([
 // [{ name: 'Alice', age: 25 }, { name: 'Charlie', age: 30 }]
 ```
 
+---
+
 ### `setLens(lens, value)`
 
-Set the focused value of a lens on every element.
+Set the focused value of a lens on every element. Useful for bulk updates.
 
+```typescript
+setLens(lens: JsLens, value: any): Pipeline
+```
+
+**Example:**
 ```javascript
+import { lens, Pipeline } from 'orlando-transducers';
+
 const statusLens = lens('status');
 const pipeline = new Pipeline().setLens(statusLens, 'published');
 pipeline.toArray([
@@ -2972,71 +3323,293 @@ pipeline.toArray([
 
 ## Geometric Optics
 
-Operations on multivector coefficient arrays (`Float64Array`). These work with flat coefficient arrays representing elements of Clifford algebras Cl(p,q,r).
+Operations on multivector coefficient arrays for Clifford algebras. These functions work with flat `Float64Array` coefficient arrays where each index corresponds to a basis blade (index = bitset of basis vectors, grade = popcount of bits).
+
+A multivector in Cl(p,q,r) has `2^(p+q+r)` coefficients. For example, Cl(3,0,0) has 8 basis blades: scalar, e1, e2, e3, e12, e13, e23, e123.
 
 ### `bladeGrade(index)`
 
-Compute the grade of a basis blade from its bit-index.
+Compute the grade (number of basis vectors) of a basis blade from its bit-index.
 
+```typescript
+bladeGrade(index: number): number
+```
+
+**Example:**
 ```javascript
 import { bladeGrade } from 'orlando-transducers';
 
-bladeGrade(0);  // 0 (scalar)
-bladeGrade(1);  // 1 (e1)
-bladeGrade(3);  // 2 (e12)
-bladeGrade(7);  // 3 (e123)
+bladeGrade(0);   // 0 (scalar: no basis vectors)
+bladeGrade(1);   // 1 (e1: one basis vector)
+bladeGrade(3);   // 2 (e12: two basis vectors, binary 0b11)
+bladeGrade(7);   // 3 (e123: three basis vectors, binary 0b111)
+bladeGrade(5);   // 2 (e13: two basis vectors, binary 0b101)
 ```
 
-### `gradeExtract(p, q, r, grade, mv)`
+---
 
-Extract coefficients of a specific grade from a multivector.
+### `bladesAtGradeCount(dimension, grade)`
 
+Count how many basis blades exist at a given grade in a given dimension.
+
+```typescript
+bladesAtGradeCount(dimension: number, grade: number): number
+```
+
+**Example:**
+```javascript
+import { bladesAtGradeCount } from 'orlando-transducers';
+
+// In 3 dimensions:
+bladesAtGradeCount(3, 0);  // 1  (scalar)
+bladesAtGradeCount(3, 1);  // 3  (vectors: e1, e2, e3)
+bladesAtGradeCount(3, 2);  // 3  (bivectors: e12, e13, e23)
+bladesAtGradeCount(3, 3);  // 1  (trivector: e123)
+```
+
+---
+
+### `gradeIndices(dimension, grade)`
+
+Get the coefficient array indices for all basis blades at a given grade.
+
+```typescript
+gradeIndices(dimension: number, grade: number): number[]
+```
+
+**Example:**
+```javascript
+import { gradeIndices } from 'orlando-transducers';
+
+gradeIndices(3, 0);  // [0]        (scalar at index 0)
+gradeIndices(3, 1);  // [1, 2, 4]  (e1, e2, e3)
+gradeIndices(3, 2);  // [3, 5, 6]  (e12, e13, e23)
+gradeIndices(3, 3);  // [7]        (e123)
+```
+
+---
+
+### `gradeExtract(dimension, grade, mv)`
+
+Extract the coefficients of a specific grade from a multivector.
+
+```typescript
+gradeExtract(dimension: number, grade: number, mv: Float64Array): Float64Array
+```
+
+**Example:**
 ```javascript
 import { gradeExtract } from 'orlando-transducers';
 
-// Cl(3,0,0): 8 basis blades
-// Scalar(1) + e1(2) + e2(3) + e3(4) + e12(5) + e13(6) + e23(7) + e123(8)
+// Cl(3,0,0): [scalar, e1, e2, e3, e12, e13, e23, e123]
 const mv = new Float64Array([1, 2, 3, 4, 5, 6, 7, 8]);
 
-gradeExtract(3, 0, 0, 0, mv);  // [1]         (scalar)
-gradeExtract(3, 0, 0, 1, mv);  // [2, 3, 4]   (vectors)
-gradeExtract(3, 0, 0, 2, mv);  // [5, 6, 7]   (bivectors)
-gradeExtract(3, 0, 0, 3, mv);  // [8]         (trivector)
+gradeExtract(3, 0, mv);  // Float64Array [1]         (scalar)
+gradeExtract(3, 1, mv);  // Float64Array [2, 3, 4]   (vectors)
+gradeExtract(3, 2, mv);  // Float64Array [5, 6, 7]   (bivectors)
+gradeExtract(3, 3, mv);  // Float64Array [8]          (trivector)
 ```
 
-### `gradeProject(p, q, r, grades, mv)`
+---
 
-Project a multivector onto specified grades, zeroing out everything else.
+### `gradeProject(dimension, grade, mv)`
 
+Project a multivector onto a single grade, zeroing out all other components.
+
+```typescript
+gradeProject(dimension: number, grade: number, mv: Float64Array): Float64Array
+```
+
+**Example:**
 ```javascript
 import { gradeProject } from 'orlando-transducers';
 
 const mv = new Float64Array([1, 2, 3, 4, 5, 6, 7, 8]);
 
-// Keep only scalar and bivector parts
-gradeProject(3, 0, 0, new Uint32Array([0, 2]), mv);
-// [1, 0, 0, 0, 5, 6, 7, 0]
+// Keep only the vector (grade 1) part
+gradeProject(3, 1, mv);
+// Float64Array [0, 2, 3, 0, 0, 0, 0, 0]
+//               ^scalar zeroed    ^bivectors zeroed
 ```
 
-### `mvNorm(mv)` / `mvNormalize(mv)`
+---
 
+### `gradeProjectMax(dimension, maxGrade, mv)`
+
+Project a multivector onto all grades up to and including `maxGrade`.
+
+```typescript
+gradeProjectMax(dimension: number, maxGrade: number, mv: Float64Array): Float64Array
+```
+
+**Example:**
 ```javascript
-import { mvNorm, mvNormalize } from 'orlando-transducers';
+import { gradeProjectMax } from 'orlando-transducers';
+
+const mv = new Float64Array([1, 2, 3, 4, 5, 6, 7, 8]);
+
+// Keep scalar + vector parts (grades 0 and 1)
+gradeProjectMax(3, 1, mv);
+// Float64Array [1, 2, 3, 4, 0, 0, 0, 0]
+```
+
+---
+
+### `gradeMask(dimension, mv)`
+
+Return a bitmask indicating which grades have non-zero coefficients.
+
+```typescript
+gradeMask(dimension: number, mv: Float64Array): number
+```
+
+**Example:**
+```javascript
+import { gradeMask } from 'orlando-transducers';
+
+const pureVector = new Float64Array([0, 1, 2, 3, 0, 0, 0, 0]);
+gradeMask(3, pureVector);  // 0b0010 = 2 (only grade 1)
+
+const mixed = new Float64Array([1, 0, 0, 0, 5, 6, 7, 0]);
+gradeMask(3, mixed);  // 0b0101 = 5 (grades 0 and 2)
+```
+
+---
+
+### `hasGrade(dimension, grade, mv)`
+
+Check if a multivector has any non-zero coefficients at a given grade.
+
+```typescript
+hasGrade(dimension: number, grade: number, mv: Float64Array): boolean
+```
+
+---
+
+### `isPureGrade(dimension, mv)`
+
+Check if a multivector has non-zero coefficients at exactly one grade.
+
+```typescript
+isPureGrade(dimension: number, mv: Float64Array): boolean
+```
+
+**Example:**
+```javascript
+import { isPureGrade } from 'orlando-transducers';
+
+const pureVector = new Float64Array([0, 1, 2, 3, 0, 0, 0, 0]);
+isPureGrade(3, pureVector);  // true (only grade 1)
+
+const mixed = new Float64Array([1, 1, 0, 0, 0, 0, 0, 0]);
+isPureGrade(3, mixed);  // false (grades 0 and 1)
+```
+
+---
+
+### `componentGet(mv, bladeIndex)`
+
+Get the coefficient at a specific blade index.
+
+```typescript
+componentGet(mv: Float64Array, bladeIndex: number): number | undefined
+```
+
+---
+
+### `componentSet(mv, bladeIndex, value)`
+
+Return a new multivector with one coefficient changed.
+
+```typescript
+componentSet(mv: Float64Array, bladeIndex: number, value: number): Float64Array
+```
+
+---
+
+### `mvNorm(mv)`
+
+Compute the magnitude (Euclidean norm) of a multivector.
+
+```typescript
+mvNorm(mv: Float64Array): number
+```
+
+**Example:**
+```javascript
+import { mvNorm } from 'orlando-transducers';
 
 const mv = new Float64Array([3, 4, 0, 0]);
-mvNorm(mv);       // 5.0
-mvNormalize(mv);  // [0.6, 0.8, 0, 0]
+mvNorm(mv);  // 5.0
 ```
 
-### `mvReverse(mv)` / `mvGradeInvolution(mv)`
+---
 
-Grade-dependent sign operations.
+### `mvNormSquared(mv)`
 
+Compute the squared magnitude (avoids the square root).
+
+```typescript
+mvNormSquared(mv: Float64Array): number
+```
+
+---
+
+### `mvNormalize(mv)`
+
+Normalize a multivector to unit length. Returns `undefined` if the norm is zero.
+
+```typescript
+mvNormalize(mv: Float64Array): Float64Array | undefined
+```
+
+**Example:**
 ```javascript
-import { mvReverse, mvGradeInvolution } from 'orlando-transducers';
+import { mvNormalize } from 'orlando-transducers';
 
-// Reverse: grade k gets sign (-1)^(k(k-1)/2)
-// Grade involution: grade k gets sign (-1)^k
+const mv = new Float64Array([3, 4, 0, 0]);
+mvNormalize(mv);  // Float64Array [0.6, 0.8, 0, 0]
+```
+
+---
+
+### `gradeInvolution(dimension, mv)`
+
+Apply grade involution: grade `k` coefficients are multiplied by `(-1)^k`.
+
+```typescript
+gradeInvolution(dimension: number, mv: Float64Array): Float64Array
+```
+
+**Example:**
+```javascript
+import { gradeInvolution } from 'orlando-transducers';
+
+// [scalar, e1, e2, e3, e12, e13, e23, e123]
+const mv = new Float64Array([1, 2, 3, 4, 5, 6, 7, 8]);
+gradeInvolution(3, mv);
+// [1, -2, -3, -4, 5, 6, 7, -8]
+// grade 0: +1, grade 1: -1, grade 2: +1, grade 3: -1
+```
+
+---
+
+### `mvReverse(dimension, mv)`
+
+Apply the reverse operation: grade `k` coefficients are multiplied by `(-1)^(k(k-1)/2)`.
+
+```typescript
+mvReverse(dimension: number, mv: Float64Array): Float64Array
+```
+
+**Example:**
+```javascript
+import { mvReverse } from 'orlando-transducers';
+
+const mv = new Float64Array([1, 2, 3, 4, 5, 6, 7, 8]);
+mvReverse(3, mv);
+// [1, 2, 3, 4, -5, -6, -7, -8]
+// grade 0: +1, grade 1: +1, grade 2: -1, grade 3: -1
 ```
 
 ---

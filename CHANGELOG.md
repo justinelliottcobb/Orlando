@@ -27,17 +27,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Phase 6g: Geometric Optics
 
 **Multivector coefficient array operations** (operate on plain `&[f64]` / `Float64Array`):
+
+JavaScript API:
 - `bladeGrade(index)` - Compute the grade of a basis blade from its index
-- `gradeExtract(p, q, r, grade, mv)` - Extract coefficients of a specific grade
-- `gradeProject(p, q, r, grades, mv)` - Project onto multiple grades simultaneously
-- `gradeMask(p, q, r, grades, mv)` - Zero out all but specified grades
+- `bladesAtGradeCount(dimension, grade)` - Count basis blades at a grade
+- `gradeIndices(dimension, grade)` - Get coefficient indices for a grade
+- `gradeExtract(dimension, grade, mv)` - Extract coefficients of a specific grade
+- `gradeProject(dimension, grade, mv)` - Project onto a single grade
+- `gradeProjectMax(dimension, maxGrade, mv)` - Project onto grades up to max
+- `gradeMask(dimension, mv)` - Bitmask of which grades are non-zero
+- `hasGrade(dimension, grade, mv)` - Check for non-zero grade components
+- `isPureGrade(dimension, mv)` - Check if only one grade is non-zero
+- `componentGet(mv, bladeIndex)` / `componentSet(mv, bladeIndex, value)` - Single coefficient access
 - `mvNorm(mv)` / `mvNormSquared(mv)` - Compute multivector magnitude
-- `mvNormalize(mv)` - Normalize a multivector to unit length
-- `mvReverse(mv)` - Grade-dependent sign reversal
-- `mvGradeInvolution(mv)` - Grade involution
-- `hasGrade(p, q, r, grade, mv)` - Check if a multivector has non-zero grade components
-- `isPureGrade(p, q, r, grade, mv)` - Check if a multivector is pure (single grade)
-- Standalone Rust functions: `blade_grade`, `grade_indices`, `grade_extract`, `grade_project`, `grade_mask`, `norm`, `normalize`, `reverse`, `grade_involution`, and more
+- `mvNormalize(mv)` - Normalize to unit length
+- `mvReverse(dimension, mv)` - Grade-dependent sign reversal
+- `gradeInvolution(dimension, mv)` - Grade involution
+
+Rust API:
+- `blade_grade`, `grade_indices`, `grade_extract`, `grade_project`, `grade_project_max`, `grade_mask`, `has_grade`, `is_pure_grade`, `component_get`, `component_set`, `norm`, `norm_squared`, `normalize`, `reverse`, `grade_involution`
 
 #### Phase 5-JS: JavaScript Pipeline Enhancements
 
