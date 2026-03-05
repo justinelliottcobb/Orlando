@@ -897,3 +897,74 @@ fn test_geometric_optics_pure_grade_filter() {
     let result = to_vec(&pipeline, multivectors);
     assert_eq!(result.len(), 2); // only the pure vector and pure bivector
 }
+
+// ===== Phase 7: Reactive Streams Integration Tests =====
+
+#[test]
+fn test_signal_with_transducer() {
+    use orlando_transducers::signal::Signal;
+
+    // Signal + map chain
+    let temperature_c = Signal::new(0.0);
+    let temperature_f = temperature_c.map(|c| c * 9.0 / 5.0 + 32.0);
+
+    assert!((*temperature_f.get() - 32.0f64).abs() < 1e-10);
+    temperature_c.set(100.0);
+    assert!((*temperature_f.get() - 212.0f64).abs() < 1e-10);
+}
+
+#[test]
+fn test_stream_fold_with_pipeline_pattern() {
+    use orlando_transducers::stream::Stream;
+
+    // Stream fold pattern: accumulate click events into a count
+    let events = Stream::new();
+    let count = events.fold(0i32, |acc, n: &i32| acc + n);
+
+    events.emit(1);
+    events.emit(5);
+    events.emit(3);
+    assert_eq!(*count.get(), 9);
+}
+
+#[test]
+fn test_stream_map_filter_take_pipeline() {
+    use orlando_transducers::stream::Stream;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    // Stream with map → filter → take: same semantics as pull-based pipeline
+    let source = Stream::new();
+    let result = source.map(|x: &i32| x * 2).filter(|x: &i32| *x > 5).take(3);
+
+    let output = Rc::new(RefCell::new(Vec::new()));
+    let output_clone = output.clone();
+    let _sub = result.subscribe(move |v: &i32| {
+        output_clone.borrow_mut().push(*v);
+    });
+
+    // Emit: 1→2, 2→4, 3→6, 4→8, 5→10, 6→12, 7→14
+    // Filter >5: 6, 8, 10, 12, 14
+    // Take 3: 6, 8, 10
+    for i in 1..=7 {
+        source.emit(i);
+    }
+    assert_eq!(*output.borrow(), vec![6, 8, 10]);
+}
+
+#[test]
+fn test_signal_combine_multiple() {
+    use orlando_transducers::signal::Signal;
+
+    let x = Signal::new(1.0);
+    let y = Signal::new(2.0);
+    let z = Signal::new(3.0);
+
+    // Combine x and y, then combine with z
+    let xy = x.combine(&y, |a, b| a + b);
+    let xyz = xy.combine(&z, |ab, c| ab * c);
+
+    assert!((*xyz.get() - 9.0f64).abs() < 1e-10); // (1+2)*3
+    x.set(4.0);
+    assert!((*xyz.get() - 18.0f64).abs() < 1e-10); // (4+2)*3
+}
