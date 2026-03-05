@@ -3,7 +3,7 @@
 //! This module provides a fluent API for building transducer pipelines
 //! that can be called from JavaScript via WASM.
 
-use js_sys::{Array, Function, Reflect};
+use js_sys::{Array, Function, Object, Reflect};
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use web_sys::console;
@@ -247,6 +247,164 @@ impl Pipeline {
         }) as Rc<dyn Fn(JsValue) -> JsValue>;
 
         ops.push(Operation::Map(map_fn));
+        Pipeline { operations: ops }
+    }
+
+    /// Extract multiple properties from each object, creating new objects with only those keys.
+    ///
+    /// This is equivalent to `.map(x => ({ key1: x.key1, key2: x.key2, ... }))`.
+    ///
+    /// # Arguments
+    ///
+    /// * `keys` - A JavaScript array of property name strings to extract
+    ///
+    /// # Examples (JavaScript)
+    ///
+    /// ```javascript
+    /// const users = [
+    ///   { id: 1, name: 'Alice', age: 30, email: 'alice@example.com' },
+    ///   { id: 2, name: 'Bob', age: 25, email: 'bob@example.com' }
+    /// ];
+    /// const projected = new Pipeline().project(['id', 'name']).toArray(users);
+    /// // [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }]
+    /// ```
+    #[wasm_bindgen]
+    pub fn project(&self, keys: &JsValue) -> Pipeline {
+        let keys_array: Array = keys.clone().dyn_into().unwrap_or_else(|_| Array::new());
+
+        // Pre-extract key strings to avoid repeated conversion
+        let key_strings: Vec<JsValue> = (0..keys_array.length())
+            .map(|i| keys_array.get(i))
+            .collect();
+
+        let mut ops = self.operations.clone();
+
+        let map_fn = Rc::new(move |val: JsValue| -> JsValue {
+            let result = Object::new();
+            for key in &key_strings {
+                if let Ok(prop_val) = Reflect::get(&val, key) {
+                    let _ = Reflect::set(&result, key, &prop_val);
+                }
+            }
+            result.into()
+        }) as Rc<dyn Fn(JsValue) -> JsValue>;
+
+        ops.push(Operation::Map(map_fn));
+        Pipeline { operations: ops }
+    }
+
+    /// Remove all falsy values from the stream.
+    ///
+    /// Filters out `null`, `undefined`, `false`, `0`, `NaN`, and `''` (empty string).
+    ///
+    /// # Examples (JavaScript)
+    ///
+    /// ```javascript
+    /// const data = [1, null, 'hello', undefined, 0, false, '', 42];
+    /// const result = new Pipeline().compact().toArray(data);
+    /// // [1, 'hello', 42]
+    /// ```
+    #[wasm_bindgen]
+    pub fn compact(&self) -> Pipeline {
+        let mut ops = self.operations.clone();
+
+        let filter_fn = Rc::new(move |val: &JsValue| -> bool {
+            val.as_bool() != Some(false)
+                && !val.is_null()
+                && !val.is_undefined()
+                && val.as_f64() != Some(0.0)
+                && val.as_string().is_none_or(|s| !s.is_empty())
+                && !is_nan(val)
+        }) as Rc<dyn Fn(&JsValue) -> bool>;
+
+        ops.push(Operation::Filter(filter_fn));
+        Pipeline { operations: ops }
+    }
+
+    /// Flatten nested arrays to a given depth.
+    ///
+    /// Each element in the stream that is an array will be expanded. Nesting
+    /// is flattened recursively up to the specified depth.
+    ///
+    /// # Arguments
+    ///
+    /// * `depth` - Maximum depth to flatten. Use 1 for a single level of flattening.
+    ///
+    /// # Examples (JavaScript)
+    ///
+    /// ```javascript
+    /// const data = [[1, 2], [3, [4, 5]], [6]];
+    /// const result = new Pipeline().flatten(1).toArray(data);
+    /// // [1, 2, 3, [4, 5], 6]
+    ///
+    /// const deep = new Pipeline().flatten(2).toArray(data);
+    /// // [1, 2, 3, 4, 5, 6]
+    /// ```
+    #[wasm_bindgen]
+    pub fn flatten(&self, depth: usize) -> Pipeline {
+        let mut ops = self.operations.clone();
+
+        let flatmap_fn = Rc::new(move |val: JsValue| -> Vec<JsValue> { flatten_value(val, depth) })
+            as Rc<dyn Fn(JsValue) -> Vec<JsValue>>;
+
+        ops.push(Operation::FlatMap(flatmap_fn));
+        Pipeline { operations: ops }
+    }
+
+    /// Filter objects that match all properties in a spec object.
+    ///
+    /// Keeps only elements where every key in the spec has a matching value.
+    /// Comparison uses strict equality (`===`-like semantics).
+    ///
+    /// # Arguments
+    ///
+    /// * `spec` - A JavaScript object whose key-value pairs must all match
+    ///
+    /// # Examples (JavaScript)
+    ///
+    /// ```javascript
+    /// const users = [
+    ///   { name: 'Alice', active: true, role: 'admin' },
+    ///   { name: 'Bob', active: false, role: 'user' },
+    ///   { name: 'Charlie', active: true, role: 'user' }
+    /// ];
+    ///
+    /// const result = new Pipeline()
+    ///   .where_matches({ active: true })
+    ///   .toArray(users);
+    /// // [{ name: 'Alice', ... }, { name: 'Charlie', ... }]
+    /// ```
+    #[wasm_bindgen(js_name = whereMatches)]
+    pub fn where_matches(&self, spec: &JsValue) -> Pipeline {
+        let spec_obj = spec.clone();
+
+        // Pre-extract spec keys and values
+        let spec_keys = Object::keys(&Object::from(spec_obj.clone()));
+        let mut spec_entries: Vec<(JsValue, JsValue)> = Vec::new();
+        for i in 0..spec_keys.length() {
+            let key = spec_keys.get(i);
+            if let Ok(val) = Reflect::get(&spec_obj, &key) {
+                spec_entries.push((key, val));
+            }
+        }
+
+        let mut ops = self.operations.clone();
+
+        let filter_fn = Rc::new(move |val: &JsValue| -> bool {
+            for (key, expected) in &spec_entries {
+                match Reflect::get(val, key) {
+                    Ok(actual) => {
+                        if !js_strict_eq(&actual, expected) {
+                            return false;
+                        }
+                    }
+                    Err(_) => return false,
+                }
+            }
+            true
+        }) as Rc<dyn Fn(&JsValue) -> bool>;
+
+        ops.push(Operation::Filter(filter_fn));
         Pipeline { operations: ops }
     }
 
@@ -1520,4 +1678,40 @@ pub fn unfold(seed: &JsValue, f: &Function, limit: u32) -> Array {
     }
 
     result
+}
+
+// ============================================================================
+// Internal helpers for Phase 5-JS pipeline methods
+// ============================================================================
+
+/// Recursively flatten a JsValue (if it's an array) up to a given depth.
+fn flatten_value(val: JsValue, depth: usize) -> Vec<JsValue> {
+    if depth == 0 {
+        return vec![val];
+    }
+
+    match val.dyn_into::<Array>() {
+        Ok(array) => {
+            let mut result = Vec::new();
+            for i in 0..array.length() {
+                let item = array.get(i);
+                result.extend(flatten_value(item, depth - 1));
+            }
+            result
+        }
+        Err(original) => vec![original],
+    }
+}
+
+/// Check if a JsValue is NaN.
+fn is_nan(val: &JsValue) -> bool {
+    js_sys::Number::is_nan(val)
+}
+
+/// Strict equality comparison for JsValue, mirroring JavaScript `===`.
+fn js_strict_eq(a: &JsValue, b: &JsValue) -> bool {
+    // wasm_bindgen's == uses Object.is() semantics, which is close to ===
+    // but differs for +0/-0 and NaN. For our use case (matching spec values
+    // which are typically primitives), this is sufficient.
+    a == b
 }
