@@ -338,20 +338,53 @@ Operations for combining and comparing multiple arrays:
 | `difference(a, b)` | Elements in a but not b | `difference(a, b)` |
 | `cartesianProduct(a, b)` | All possible pairs | `cartesianProduct(colors, sizes)` |
 
-### Optics (Lenses)
+### Optics
 
-Functional lenses for immutable, composable data access:
+Functional optics for immutable, composable data access and transformation:
 
 | Function/Method | Description | Example |
 |-----------------|-------------|---------|
-| `lens(property)` | Create a lens focusing on a property | `lens('name')` |
-| `lensPath(path)` | Create a lens for a nested path | `lensPath(['address', 'city'])` |
-| `optional(property)` | Create a lens for nullable fields | `optional('phone')` |
+| `lens(property)` | Focus on an object property | `lens('name')` |
+| `lensPath(path)` | Focus on a nested path | `lensPath(['address', 'city'])` |
+| `optional(property)` | Focus on a nullable field | `optional('phone')` |
+| `prism(matchFn, buildFn)` | Focus on a sum type / variant | `prism(x => x.tag === 'Some' ? x.value : undefined, v => ({tag: 'Some', value: v}))` |
+| `iso(toFn, fromFn)` | Lossless bidirectional conversion | `iso(c => c * 9/5 + 32, f => (f - 32) * 5/9)` |
+| `fold(extractFn)` | Read-only traversal | `fold(obj => Object.values(obj))` |
+| `traversal(getAllFn, overAllFn)` | Collection-level lens | `traversal(arr => arr, (arr, fn) => arr.map(fn))` |
 | `.get(obj)` | Extract the focused value | `nameLens.get(user)` |
 | `.set(obj, value)` | Immutably update the value | `nameLens.set(user, "Bob")` |
 | `.over(obj, fn)` | Transform with a function | `nameLens.over(user, toUpper)` |
-| `.compose(other)` | Compose lenses for deep access | `addrLens.compose(cityLens)` |
+| `.compose(other)` | Compose optics for deep access | `addrLens.compose(cityLens)` |
 | `.getOr(obj, default)` | Get with default (optional only) | `phoneLens.getOr(user, "N/A")` |
+
+### Pipeline Enhancements
+
+JavaScript-specific convenience methods:
+
+| Method | Description | Example |
+|--------|-------------|---------|
+| `.pluck(key)` | Extract a single property | `.pluck('name')` |
+| `.project(keys)` | Extract multiple properties | `.project(['id', 'name'])` |
+| `.compact()` | Remove falsy values | `.compact()` |
+| `.flatten(depth)` | Flatten nested arrays | `.flatten(2)` |
+| `.whereMatches(spec)` | Pattern-match filter | `.whereMatches({ active: true })` |
+| `.viewLens(lens)` | Extract via lens | `.viewLens(nameLens)` |
+| `.overLens(lens, fn)` | Transform via lens | `.overLens(priceLens, p => p * 0.9)` |
+| `.filterLens(lens, pred)` | Filter by lens value | `.filterLens(ageLens, a => a >= 18)` |
+| `.setLens(lens, value)` | Set via lens | `.setLens(statusLens, "published")` |
+
+### Geometric Optics
+
+Operations on multivector coefficient arrays (`Float64Array`):
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `bladeGrade(index)` | Grade of a basis blade | `bladeGrade(3)` → 2 |
+| `gradeExtract(p,q,r,grade,mv)` | Extract grade coefficients | `gradeExtract(3,0,0,2,mv)` |
+| `gradeProject(p,q,r,grades,mv)` | Project onto grades | `gradeProject(3,0,0,[0,2],mv)` |
+| `mvNorm(mv)` | Multivector magnitude | `mvNorm(mv)` |
+| `mvNormalize(mv)` | Normalize to unit length | `mvNormalize(mv)` |
+| `mvReverse(mv)` | Grade-dependent sign reversal | `mvReverse(mv)` |
 
 **Full API documentation:** [docs/api/JAVASCRIPT.md](docs/api/JAVASCRIPT.md)
 
@@ -567,6 +600,35 @@ npm run bench:quick      # Quick benchmarks
 - **Prototyping** - Array methods are more familiar during development
 - **Operations requiring all data** - e.g., `sort`, `reverse` (Orlando doesn't optimize these)
 
+## Rust API
+
+Orlando is also a first-class Rust crate. Use transducers directly with iterators:
+
+```rust
+use orlando_transducers::iter_ext::{TransduceExt, PipelineBuilder};
+use orlando_transducers::{Map, Filter, Take};
+
+// Extension trait on iterators
+let result: Vec<i32> = (1..100)
+    .transduce(Map::new(|x: i32| x * 2)
+        .compose(Filter::new(|x: &i32| *x > 10))
+        .compose(Take::new(5)));
+
+// Fluent builder API
+let result = PipelineBuilder::new()
+    .map(|x: i32| x * 2)
+    .filter(|x: &i32| *x > 10)
+    .take(5)
+    .run(1..100);
+
+// Reactive signals
+use orlando_transducers::signal::Signal;
+let celsius = Signal::new(0.0);
+let fahrenheit = celsius.map(|c| c * 9.0 / 5.0 + 32.0);
+celsius.set(100.0);
+assert_eq!(*fahrenheit.get(), 212.0);
+```
+
 ## Documentation
 
 - **[JavaScript/TypeScript API](docs/api/JAVASCRIPT.md)** - Complete API reference
@@ -642,20 +704,25 @@ wasm-pack build --target web --release
 ```
 orlando/
 ├── src/
-│   ├── lib.rs          # Core library
-│   ├── step.rs         # Step monad (early termination)
-│   ├── transducer.rs   # Transducer trait & composition
-│   ├── transforms.rs   # Map, Filter, Take, etc.
-│   ├── collectors.rs   # Terminal operations
-│   ├── logic.rs        # Predicate combinators
-│   ├── optics.rs       # Functional lenses (Rust API)
-│   ├── optics_wasm.rs  # Lenses (JavaScript WASM API)
-│   ├── simd.rs         # SIMD optimizations
-│   └── pipeline.rs     # Transducers (JavaScript WASM API)
-├── docs/api/           # API documentation
-├── examples/           # Interactive HTML examples
-├── tests/              # Integration & property tests
-└── benches/            # Performance benchmarks
+│   ├── lib.rs                  # Core library & re-exports
+│   ├── step.rs                 # Step monad (early termination)
+│   ├── transducer.rs           # Transducer trait & composition
+│   ├── transforms.rs           # Map, Filter, Take, etc.
+│   ├── collectors.rs           # Terminal operations
+│   ├── logic.rs                # Predicate combinators
+│   ├── optics.rs               # Optics (Lens, Optional, Prism, Iso, Fold, Traversal)
+│   ├── optics_wasm.rs          # Optics JavaScript WASM API
+│   ├── geometric_optics.rs     # Multivector coefficient array operations
+│   ├── geometric_optics_wasm.rs # Geometric optics WASM API
+│   ├── signal.rs               # Reactive Signal<T>
+│   ├── stream.rs               # Reactive Stream<T>
+│   ├── iter_ext.rs             # Rust iterator extensions & PipelineBuilder
+│   ├── simd.rs                 # SIMD optimizations
+│   └── pipeline.rs             # JavaScript Pipeline WASM API
+├── docs/api/                   # API documentation
+├── examples/                   # Interactive HTML examples
+├── tests/                      # Integration & property tests
+└── benches/                    # Performance benchmarks
 ```
 
 ## Browser Compatibility

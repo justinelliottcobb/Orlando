@@ -2135,7 +2135,7 @@ const complexTransform = new When(
 
 ---
 
-## Functional Lenses (Optics) ✨ NEW in v0.4.0
+## Functional Lenses (Optics)
 
 Orlando provides functional lenses for clean, composable, immutable updates to nested data structures. Lenses eliminate verbose object spreading and provide a principled way to work with nested data.
 
@@ -2750,6 +2750,297 @@ const addr: any = addressLens.getOr(user, { city: 'Unknown', zip: '00000' });
 
 ---
 
+## Advanced Optics
+
+### Prism
+
+A Prism focuses on a value that may or may not exist within a sum type (tagged union, enum variant).
+
+#### `prism(matchFn, buildFn)`
+
+```javascript
+import { prism } from 'orlando-transducers';
+
+// Prism for extracting numbers from a mixed-type wrapper
+const numPrism = prism(
+  val => typeof val === 'number' ? val : undefined,  // match
+  n => n                                               // build
+);
+
+console.log(numPrism.preview(42));        // 42
+console.log(numPrism.preview("hello"));   // undefined
+console.log(numPrism.review(99));         // 99
+```
+
+**Methods:**
+- `preview(source)` - Extract the value if it matches, otherwise `undefined`
+- `review(value)` - Construct a new value from the focused type
+
+### Iso
+
+An Iso (isomorphism) represents a lossless bidirectional conversion.
+
+#### `iso(toFn, fromFn)`
+
+```javascript
+import { iso } from 'orlando-transducers';
+
+// Celsius ↔ Fahrenheit
+const tempIso = iso(
+  c => c * 9 / 5 + 32,   // to: Celsius → Fahrenheit
+  f => (f - 32) * 5 / 9   // from: Fahrenheit → Celsius
+);
+
+console.log(tempIso.forward(100));  // 212
+console.log(tempIso.backward(32));  // 0
+```
+
+**Methods:**
+- `forward(source)` - Convert S → A
+- `backward(value)` - Convert A → S
+
+### Fold
+
+A Fold is a read-only optic that extracts multiple values.
+
+#### `fold(extractFn)`
+
+```javascript
+import { fold } from 'orlando-transducers';
+
+// Extract all values from an object
+const valuesFold = fold(obj => Object.values(obj));
+
+console.log(valuesFold.getAll({ a: 1, b: 2, c: 3 }));  // [1, 2, 3]
+```
+
+**Methods:**
+- `getAll(source)` - Extract all focused values as an array
+
+### Traversal
+
+A Traversal focuses on multiple values within a structure, supporting both read and write.
+
+#### `traversal(getAllFn, overAllFn)`
+
+```javascript
+import { traversal } from 'orlando-transducers';
+
+// Traversal over array elements
+const elemTraversal = traversal(
+  arr => arr,                              // getAll
+  (arr, fn) => arr.map(v => fn(v))        // overAll
+);
+
+const nums = [1, 2, 3, 4];
+console.log(elemTraversal.getAll(nums));                  // [1, 2, 3, 4]
+console.log(elemTraversal.setAll(nums, 0));               // [0, 0, 0, 0]
+console.log(elemTraversal.overAll(nums, x => x * 10));    // [10, 20, 30, 40]
+```
+
+**Methods:**
+- `getAll(source)` - Get all focused values
+- `setAll(source, value)` - Set all focused values
+- `overAll(source, fn)` - Transform all focused values
+
+---
+
+## Pipeline Enhancements
+
+### `pluck(key)`
+
+Extract a single property from each object in the stream.
+
+```javascript
+const pipeline = new Pipeline().pluck('name');
+pipeline.toArray([{ name: 'Alice' }, { name: 'Bob' }]);
+// ['Alice', 'Bob']
+```
+
+### `project(keys)`
+
+Extract multiple properties from each object.
+
+```javascript
+const pipeline = new Pipeline().project(['id', 'name']);
+pipeline.toArray([
+  { id: 1, name: 'Alice', age: 30, email: 'alice@test.com' },
+  { id: 2, name: 'Bob', age: 25, email: 'bob@test.com' }
+]);
+// [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }]
+```
+
+### `compact()`
+
+Remove all falsy values (`null`, `undefined`, `false`, `0`, `NaN`, `''`).
+
+```javascript
+const pipeline = new Pipeline().compact();
+pipeline.toArray([1, null, 'hello', undefined, 0, false, '', 42]);
+// [1, 'hello', 42]
+```
+
+### `flatten(depth)`
+
+Flatten nested arrays to a given depth.
+
+```javascript
+const pipeline = new Pipeline().flatten(1);
+pipeline.toArray([[1, 2], [3, [4, 5]], [6]]);
+// [1, 2, 3, [4, 5], 6]
+
+const deep = new Pipeline().flatten(2);
+deep.toArray([[1, 2], [3, [4, 5]], [6]]);
+// [1, 2, 3, 4, 5, 6]
+```
+
+### `whereMatches(spec)`
+
+Filter objects that match all properties in a spec object.
+
+```javascript
+const pipeline = new Pipeline().whereMatches({ active: true, role: 'admin' });
+pipeline.toArray([
+  { name: 'Alice', active: true, role: 'admin' },
+  { name: 'Bob', active: false, role: 'user' },
+  { name: 'Charlie', active: true, role: 'user' }
+]);
+// [{ name: 'Alice', active: true, role: 'admin' }]
+```
+
+---
+
+## Optics-Pipeline Integration
+
+Use lenses directly within pipelines for focused data transformations.
+
+### `viewLens(lens)`
+
+Apply a lens to extract the focused value from each element.
+
+```javascript
+const nameLens = lens('name');
+const pipeline = new Pipeline().viewLens(nameLens);
+pipeline.toArray([{ name: 'Alice' }, { name: 'Bob' }]);
+// ['Alice', 'Bob']
+```
+
+### `overLens(lens, fn)`
+
+Transform each element's focused value through a lens.
+
+```javascript
+const priceLens = lens('price');
+const pipeline = new Pipeline().overLens(priceLens, p => p * 0.9);
+pipeline.toArray([
+  { name: 'Widget', price: 100 },
+  { name: 'Gadget', price: 200 }
+]);
+// [{ name: 'Widget', price: 90 }, { name: 'Gadget', price: 180 }]
+```
+
+### `filterLens(lens, pred)`
+
+Filter elements based on a predicate applied to the focused value.
+
+```javascript
+const ageLens = lens('age');
+const pipeline = new Pipeline().filterLens(ageLens, a => a >= 18);
+pipeline.toArray([
+  { name: 'Alice', age: 25 },
+  { name: 'Bob', age: 17 },
+  { name: 'Charlie', age: 30 }
+]);
+// [{ name: 'Alice', age: 25 }, { name: 'Charlie', age: 30 }]
+```
+
+### `setLens(lens, value)`
+
+Set the focused value of a lens on every element.
+
+```javascript
+const statusLens = lens('status');
+const pipeline = new Pipeline().setLens(statusLens, 'published');
+pipeline.toArray([
+  { id: 1, status: 'draft' },
+  { id: 2, status: 'draft' }
+]);
+// [{ id: 1, status: 'published' }, { id: 2, status: 'published' }]
+```
+
+---
+
+## Geometric Optics
+
+Operations on multivector coefficient arrays (`Float64Array`). These work with flat coefficient arrays representing elements of Clifford algebras Cl(p,q,r).
+
+### `bladeGrade(index)`
+
+Compute the grade of a basis blade from its bit-index.
+
+```javascript
+import { bladeGrade } from 'orlando-transducers';
+
+bladeGrade(0);  // 0 (scalar)
+bladeGrade(1);  // 1 (e1)
+bladeGrade(3);  // 2 (e12)
+bladeGrade(7);  // 3 (e123)
+```
+
+### `gradeExtract(p, q, r, grade, mv)`
+
+Extract coefficients of a specific grade from a multivector.
+
+```javascript
+import { gradeExtract } from 'orlando-transducers';
+
+// Cl(3,0,0): 8 basis blades
+// Scalar(1) + e1(2) + e2(3) + e3(4) + e12(5) + e13(6) + e23(7) + e123(8)
+const mv = new Float64Array([1, 2, 3, 4, 5, 6, 7, 8]);
+
+gradeExtract(3, 0, 0, 0, mv);  // [1]         (scalar)
+gradeExtract(3, 0, 0, 1, mv);  // [2, 3, 4]   (vectors)
+gradeExtract(3, 0, 0, 2, mv);  // [5, 6, 7]   (bivectors)
+gradeExtract(3, 0, 0, 3, mv);  // [8]         (trivector)
+```
+
+### `gradeProject(p, q, r, grades, mv)`
+
+Project a multivector onto specified grades, zeroing out everything else.
+
+```javascript
+import { gradeProject } from 'orlando-transducers';
+
+const mv = new Float64Array([1, 2, 3, 4, 5, 6, 7, 8]);
+
+// Keep only scalar and bivector parts
+gradeProject(3, 0, 0, new Uint32Array([0, 2]), mv);
+// [1, 0, 0, 0, 5, 6, 7, 0]
+```
+
+### `mvNorm(mv)` / `mvNormalize(mv)`
+
+```javascript
+import { mvNorm, mvNormalize } from 'orlando-transducers';
+
+const mv = new Float64Array([3, 4, 0, 0]);
+mvNorm(mv);       // 5.0
+mvNormalize(mv);  // [0.6, 0.8, 0, 0]
+```
+
+### `mvReverse(mv)` / `mvGradeInvolution(mv)`
+
+Grade-dependent sign operations.
+
+```javascript
+import { mvReverse, mvGradeInvolution } from 'orlando-transducers';
+
+// Reverse: grade k gets sign (-1)^(k(k-1)/2)
+// Grade involution: grade k gets sign (-1)^k
+```
+
+---
+
 ## Next Steps
 
 - Check out the [Hybrid Composition Guide](../HYBRID_COMPOSITION.md) for combining transducers with multi-input operations
@@ -2758,4 +3049,4 @@ const addr: any = addressLens.getOr(user, { city: 'Unknown', zip: '00000' });
 
 ---
 
-**Questions?** [Open an issue](https://github.com/yourusername/orlando/issues) on GitHub.
+**Questions?** [Open an issue](https://github.com/justinelliottcobb/Orlando/issues) on GitHub.

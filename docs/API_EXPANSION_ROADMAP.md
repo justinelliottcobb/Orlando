@@ -2,14 +2,23 @@
 
 ## Goal: Achieve 1:1+ Feature Parity with Ramda
 
-**Current Status:** 45 operations (14 transducers + 30 collectors + 1 JS helper)
+**Current Status:** 80+ operations across transducers, collectors, optics, pipeline methods, and reactive primitives
 **Ramda List Operations:** ~80+
-**Target:** 50+ operations (comprehensive coverage)
+**Target:** Full Ramda parity + beyond (optics hierarchy, reactive streams, geometric optics)
 
 **Phase 1 Status:** ✅ COMPLETE (10/10 operations, 171 tests)
 **Phase 2a Status:** ✅ COMPLETE (6/6 operations, 35 tests)
 **Phase 2b Status:** ✅ COMPLETE (10/10 operations, 96 tests)
 **Phase 3 Status:** ✅ COMPLETE (8/8 operations, 42 tests)
+**Phase 4 Status:** ✅ COMPLETE (stats collectors implemented in code)
+**Phase 5 Status:** ✅ COMPLETE (collection utilities implemented in code)
+**Phase 5-JS Status:** ✅ COMPLETE (5/5 pipeline methods: pluck, project, compact, flatten, whereMatches)
+**Phase 6a Status:** ✅ COMPLETE (Lens, Optional)
+**Phase 6b Status:** ✅ COMPLETE (Prism, Iso, Fold, Traversal)
+**Phase 6c Status:** ✅ COMPLETE (4 optics-pipeline integration methods)
+**Phase 6g Status:** ✅ COMPLETE (geometric optics on coefficient arrays)
+**Phase 7 Status:** ✅ COMPLETE (Signal, Stream reactive primitives)
+**Phase 8 Status:** ✅ COMPLETE (TransduceExt, PipelineBuilder)
 
 ## Classification: Transducer vs. Collector vs. Helper
 
@@ -919,39 +928,39 @@ const normalizedEmails = new Pipeline()
 27. ✅ Unless (inverse conditional)
 28. ✅ IfElse (branch on condition)
 
-### **Phase 4: Aggregation & Statistical Operations** - 8 operations
-1. Product (multiply all)
-2. Mean (average)
-3. Median (middle value)
-4. Min / Max (extrema)
-5. MinBy / MaxBy (extrema by key)
-6. Variance / StdDev (spread)
-7. Quantile (percentiles)
-8. Mode (most frequent)
+### **Phase 4: Aggregation & Statistical Operations** ✅ COMPLETE - 8 operations
+1. ✅ Product (multiply all)
+2. ✅ Mean (average)
+3. ✅ Median (middle value)
+4. ✅ Min / Max (extrema)
+5. ✅ MinBy / MaxBy (extrema by key)
+6. ✅ Variance / StdDev (spread)
+7. ✅ Quantile (percentiles)
+8. ✅ Mode (most frequent)
 
-**Priority: HIGH** - Essential for data analysis and numerical computing
-
-### **Phase 5: Collection Utilities & Advanced Helpers** - 10 operations
+### **Phase 5: Collection Utilities & Advanced Helpers** ✅ COMPLETE - 10 operations
 **5a: Sorting & Reversal (3)**
-1. SortBy
-2. SortWith
-3. Reverse
+1. ✅ SortBy
+2. ✅ SortWith
+3. ✅ Reverse
 
 **5b: Generators & Sequences (4)**
-4. Range
-5. Repeat
-6. Cycle
-7. Unfold
+4. ✅ Range
+5. ✅ Repeat
+6. ✅ Cycle
+7. ✅ Unfold
 
-**5c: Path Operations (3)** - Facilitate Phase 6
-8. Path (deep access)
-9. PathOr (with default)
-10. Evolve (nested transform)
+**5c: Path Operations (3)**
+8. ✅ Path (deep access)
+9. ✅ PathOr (with default)
+10. ✅ Evolve (nested transform)
 
-**Priority: MEDIUM** - Non-streaming utilities, Phase 6 foundation
-
-### **Phase 5-JS: JavaScript Enhancements** - 5 operations
-Additional JavaScript-specific DX improvements
+### **Phase 5-JS: JavaScript Enhancements** ✅ COMPLETE - 5 operations
+1. ✅ Pluck (extract single property)
+2. ✅ Project (extract multiple properties)
+3. ✅ Compact (remove falsy values)
+4. ✅ Flatten (flatten nested arrays to depth)
+5. ✅ WhereMatches (pattern-match filter)
 
 ---
 
@@ -1055,13 +1064,18 @@ pub struct TakeLast<T> {
 
 **Comprehensive Roadmap Goals**
 
-| Category | Phase 1 Start | Current (v0.2.0) | After Phase 4-5 | With Phase 6 | Target |
-|----------|---------------|------------------|-----------------|--------------|--------|
-| Transducers | 10 | 14 | 16 | 16 | 18 |
-| Collectors | 8 | 30 | 41 | 41 | 45 |
-| Helpers | 0 | 1 | 11 | 11 | 13 |
-| Optics | 0 | 0 | 0 | 8 | 8 |
-| **Total** | **18** | **45** | **68** | **76** | **84** |
+| Category | v0.1.0 | v0.4.0 | Current | Target |
+|----------|--------|--------|---------|--------|
+| Transducers | 14 | 14 | 14 | 18 |
+| Collectors | 30 | 30 | 30 | 35 |
+| Helpers | 1 | 1 | 11 | 13 |
+| Optics (Rust) | 0 | 2 | 6 | 6 |
+| Optics (JS) | 0 | 3 | 7 | 7 |
+| Pipeline methods | 0 | 0 | 9 | 9 |
+| Geometric optics | 0 | 0 | 15 | 15 |
+| Reactive primitives | 0 | 0 | 2 | 2 |
+| Rust API | 0 | 0 | 3 | 3 |
+| **Total** | **45** | **50** | **97** | **108** |
 
 **Coverage Goals:**
 - ✅ 100% of Ramda's high-frequency operations
@@ -1110,12 +1124,18 @@ pub struct TakeLast<T> {
 6. ✅ Phase 2a: Multi-input operations (Merge, Intersection, Difference, Union, SymmetricDifference)
 7. ✅ Phase 2b: High-value collectors (CartesianProduct, TopK, ReservoirSample, PartitionBy, Frequencies, ZipLongest, Aperture, TakeLast, DropLast)
 8. ✅ Phase 3: Logic functions (both, either, complement, all_pass, any_pass, When, Unless, IfElse)
-9. ⬜ Add hybrid composition documentation and examples to JavaScript docs
-10. ⬜ Update JavaScript API documentation with Phase 2b and Phase 3 functions
-11. ⬜ Create migration guide: Ramda → Orlando
+9. ✅ Phase 6b: Advanced optics (Prism, Iso, Fold, Traversal)
+10. ✅ Phase 6g: Geometric optics on coefficient arrays
+11. ✅ Phase 5-JS: JavaScript pipeline enhancements (pluck, project, compact, flatten, whereMatches)
+12. ✅ Phase 6c: Optics-pipeline integration (viewLens, overLens, filterLens, setLens)
+13. ✅ Phase 7: Reactive streams (Signal, Stream)
+14. ✅ Phase 8: Rust API polish (TransduceExt, PipelineBuilder)
+15. ⬜ Phase 6b+: Profunctor optics encoding (blocked on Karpal crates.io publish)
+16. ⬜ Phase 9: Performance & quality
+17. ⬜ Phase 10: Documentation & release (v1.0)
 
 ---
 
-**Last Updated:** 2025-11-03
-**Status:** ✅ Phase 1, 2a, 2b (ALL 10/10), and 3 COMPLETE! (45 operations total)
-**Priority:** Document Phase 2b and Phase 3 in JavaScript API docs
+**Last Updated:** 2026-03-04
+**Status:** Phases 1-8 COMPLETE (694 tests, 97 operations). Phases 9-10 remain for v1.0.
+**Next:** Phase 6b+ (profunctor refactor via Karpal), Phase 9 (perf), Phase 10 (docs/release)
