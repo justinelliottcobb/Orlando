@@ -598,6 +598,83 @@ const result = new Pipeline()
 
 ---
 
+## Immutable Nested Updates with Optics
+
+Orlando's optics replace verbose manual spreading for immutable updates.
+
+### Simple Property Update
+
+**Before (Spread):**
+```javascript
+const updated = { ...user, name: "Bob" };
+```
+
+**After (Orlando):**
+```javascript
+import { lens } from 'orlando-transducers';
+
+const nameLens = lens('name');
+const updated = nameLens.set(user, "Bob");
+```
+
+### Deep Nested Update
+
+**Before (Spread):**
+```javascript
+const updated = {
+  ...state,
+  user: {
+    ...state.user,
+    address: {
+      ...state.user.address,
+      city: "Boston"
+    }
+  }
+};
+```
+
+**After (Orlando):**
+```javascript
+import { lensPath } from 'orlando-transducers';
+
+const cityLens = lensPath(['user', 'address', 'city']);
+const updated = cityLens.set(state, "Boston");
+```
+
+### Transform In Place
+
+**Before (Spread):**
+```javascript
+const updated = { ...user, age: user.age + 1 };
+```
+
+**After (Orlando):**
+```javascript
+const ageLens = lens('age');
+const updated = ageLens.over(user, age => age + 1);
+```
+
+### Nullable Fields with Optional
+
+**Before (Manual check):**
+```javascript
+const phone = user.phone != null ? user.phone : "N/A";
+const updated = user.phone != null
+  ? { ...user, phone: normalize(user.phone) }
+  : user;
+```
+
+**After (Orlando):**
+```javascript
+import { optional } from 'orlando-transducers';
+
+const phoneLens = optional('phone');
+const phone = phoneLens.getOr(user, "N/A");
+const updated = phoneLens.over(user, normalize); // no-op if undefined
+```
+
+---
+
 ## Next Steps
 
 - Read the [JavaScript API Documentation](./JAVASCRIPT.md)

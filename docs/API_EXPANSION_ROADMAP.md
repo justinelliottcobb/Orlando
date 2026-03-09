@@ -1130,12 +1130,12 @@ pub struct TakeLast<T> {
 12. ✅ Phase 6c: Optics-pipeline integration (viewLens, overLens, filterLens, setLens)
 13. ✅ Phase 7: Reactive streams (Signal, Stream)
 14. ✅ Phase 8: Rust API polish (TransduceExt, PipelineBuilder)
-15. ⬜ Phase 6b+: Profunctor optics encoding (blocked on Karpal crates.io publish)
+15. ✅ Phase 6b+: Profunctor optics via Karpal
 16. ⬜ Phase 9: Performance & quality
 17. ⬜ Phase 10: Documentation & release (v1.0)
 
 ---
 
-**Last Updated:** 2026-03-04
-**Status:** Phases 1-8 COMPLETE (694 tests, 97 operations). Phases 9-10 remain for v1.0.
-**Next:** Phase 6b+ (profunctor refactor via Karpal), Phase 9 (perf), Phase 10 (docs/release)
+**Last Updated:** 2026-03-09
+**Status:** Phases 1-8 + 6b+ COMPLETE (717 tests, 97 operations). Phases 9-10 remain for v1.0.
+**Next:** Phase 9 (performance & quality), then Phase 10 (docs & v1.0 release)

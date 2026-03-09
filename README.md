@@ -130,7 +130,7 @@ const emails = activeUserEmails.toArray(users);
 
 ## Functional Lenses (Optics)
 
-**NEW in v0.4.0!** Orlando now includes high-performance functional lenses for immutable data access and transformation.
+**NEW in v0.4.0, enhanced in v0.5.0!** Orlando includes high-performance functional lenses and a full optics hierarchy for immutable data access and transformation.
 
 ### What are Lenses?
 
@@ -373,6 +373,21 @@ JavaScript-specific convenience methods:
 | `.filterLens(lens, pred)` | Filter by lens value | `.filterLens(ageLens, a => a >= 18)` |
 | `.setLens(lens, value)` | Set via lens | `.setLens(statusLens, "published")` |
 
+### Profunctor Optics (v0.5.0)
+
+Orlando's optics are backed by a profunctor encoding via [Karpal](https://crates.io/crates/karpal-optics), enabling principled composition and cross-type conversions:
+
+| Method | Description | Example |
+|--------|-------------|---------|
+| `.transform()` | Access the profunctor encoding | `lens.transform()` (Strong), `prism.transform()` (Choice) |
+| `.then(other)` | Compose optics | `lens_a.then(lens_b)` |
+| `.to_traversal()` | Convert to traversal | `lens.to_traversal()` |
+| `.to_fold()` | Convert to fold | `prism.to_fold()` |
+| `fold.fold_map(obj, f)` | Map and combine with monoid | `fold.fold_map(&data, \|x\| Sum(x))` |
+| `fold.any(obj, pred)` | Check if any focused value matches | `fold.any(&data, \|x\| x > 5)` |
+| `fold.all(obj, pred)` | Check if all focused values match | `fold.all(&data, \|x\| x > 0)` |
+| `fold.find(obj, pred)` | Find first matching value | `fold.find(&data, \|x\| x > 5)` |
+
 ### Geometric Optics
 
 Operations on multivector coefficient arrays (`Float64Array`):
@@ -602,31 +617,50 @@ npm run bench:quick      # Quick benchmarks
 
 ## Rust API
 
-Orlando is also a first-class Rust crate. Use transducers directly with iterators:
+Orlando is a first-class Rust crate with ergonomic iterator extensions, reactive primitives, and a fluent builder API.
+
+### TransduceExt & PipelineBuilder (v0.5.0)
 
 ```rust
 use orlando_transducers::iter_ext::{TransduceExt, PipelineBuilder};
 use orlando_transducers::{Map, Filter, Take};
 
-// Extension trait on iterators
+// Extension trait — call .transduce() on any iterator
 let result: Vec<i32> = (1..100)
     .transduce(Map::new(|x: i32| x * 2)
         .compose(Filter::new(|x: &i32| *x > 10))
         .compose(Take::new(5)));
 
-// Fluent builder API
+// Fluent builder API — no manual composition needed
 let result = PipelineBuilder::new()
     .map(|x: i32| x * 2)
     .filter(|x: &i32| *x > 10)
     .take(5)
     .run(1..100);
+```
 
-// Reactive signals
+### Reactive Signals & Streams (v0.5.0)
+
+```rust
 use orlando_transducers::signal::Signal;
+use orlando_transducers::stream::Stream;
+
+// Signal — a time-varying value with derived computations
 let celsius = Signal::new(0.0);
 let fahrenheit = celsius.map(|c| c * 9.0 / 5.0 + 32.0);
 celsius.set(100.0);
 assert_eq!(*fahrenheit.get(), 212.0);
+
+// Stream — push-based event processing
+let clicks = Stream::new();
+let doubles = clicks.map(|x: i32| x * 2);
+doubles.subscribe(|val| println!("Got: {}", val));
+clicks.emit(21); // prints "Got: 42"
+
+// Bridge streams to signals with fold
+let counter = Signal::new(0);
+let increments = Stream::new();
+counter.fold(&increments, 0, |acc, _| acc + 1);
 ```
 
 ## Documentation
@@ -663,7 +697,7 @@ Orlando can also be used as a native Rust library:
 
 ```toml
 [dependencies]
-orlando = "0.1.0"
+orlando-transducers = "0.5.0"
 ```
 
 ```rust
@@ -711,6 +745,7 @@ orlando/
 │   ├── collectors.rs           # Terminal operations
 │   ├── logic.rs                # Predicate combinators
 │   ├── optics.rs               # Optics (Lens, Optional, Prism, Iso, Fold, Traversal)
+│   ├── profunctor.rs           # Profunctor re-exports (Strong, Choice, Traversing)
 │   ├── optics_wasm.rs          # Optics JavaScript WASM API
 │   ├── geometric_optics.rs     # Multivector coefficient array operations
 │   ├── geometric_optics_wasm.rs # Geometric optics WASM API
