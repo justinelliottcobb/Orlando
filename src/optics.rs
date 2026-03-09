@@ -635,10 +635,7 @@ where
     {
         let to_fn = self.to_fn;
         let from_fn = self.from_fn;
-        Prism::new(
-            move |s: &S| Some(to_fn(s)),
-            move |a: A| from_fn(a),
-        )
+        Prism::new(move |s: &S| Some(to_fn(s)), move |a: A| from_fn(a))
     }
 
     /// Convert this Iso into a Traversal (every Iso is a single-focus Traversal).
@@ -760,12 +757,7 @@ where
     {
         let outer = self.fold_fn;
         let inner = inner.fold_fn;
-        Fold::new(move |s: &S| {
-            outer(s)
-                .into_iter()
-                .flat_map(|a| inner(&a))
-                .collect()
-        })
+        Fold::new(move |s: &S| outer(s).into_iter().flat_map(|a| inner(&a)).collect())
     }
 }
 
@@ -2205,10 +2197,7 @@ mod tests {
 
             let circle = Shape::Circle(5.0);
             assert_eq!(trav.get_all(&circle), vec![5.0]);
-            assert_eq!(
-                trav.over_all(&circle, |r| r * 2.0),
-                Shape::Circle(10.0)
-            );
+            assert_eq!(trav.over_all(&circle, |r| r * 2.0), Shape::Circle(10.0));
 
             let rect = Shape::Rectangle(2.0, 3.0);
             assert!(trav.get_all(&rect).is_empty());
@@ -2275,22 +2264,6 @@ mod tests {
 
         #[test]
         fn test_lens_then() {
-            let address_lens = Lens::new(
-                |user: &User| user.address.clone().unwrap(),
-                |user: &User, address: Address| User {
-                    name: user.name.clone(),
-                    age: user.age,
-                    address: Some(address),
-                },
-            );
-            let city_lens = Lens::new(
-                |addr: &Address| addr.city.clone(),
-                |addr: &Address, city: String| Address {
-                    city,
-                    zip: addr.zip.clone(),
-                },
-            );
-
             let user = User {
                 name: "Alice".to_string(),
                 age: 30,
@@ -2300,7 +2273,6 @@ mod tests {
                 }),
             };
 
-            // then() should work identically to compose()
             let via_then = Lens::new(
                 |user: &User| user.address.clone().unwrap(),
                 |user: &User, address: Address| User {
@@ -2318,6 +2290,8 @@ mod tests {
             ));
 
             assert_eq!(via_then.get(&user), "NYC");
+            let updated = via_then.set(&user, "Boston".to_string());
+            assert_eq!(updated.address.unwrap().city, "Boston");
         }
 
         #[test]
@@ -2329,7 +2303,8 @@ mod tests {
             }
 
             let members_fold = Fold::new(|team: &Team| team.members.clone());
-            let char_fold = Fold::new(|s: &String| s.chars().map(|c| c.to_string()).collect::<Vec<_>>());
+            let char_fold =
+                Fold::new(|s: &String| s.chars().map(|c| c.to_string()).collect::<Vec<_>>());
 
             let composed = members_fold.then(char_fold);
             let team = Team {
@@ -2337,7 +2312,12 @@ mod tests {
             };
             assert_eq!(
                 composed.fold_of(&team),
-                vec!["a".to_string(), "b".to_string(), "c".to_string(), "d".to_string()]
+                vec![
+                    "a".to_string(),
+                    "b".to_string(),
+                    "c".to_string(),
+                    "d".to_string()
+                ]
             );
         }
 
@@ -2366,9 +2346,8 @@ mod tests {
 
         #[test]
         fn test_fold_any_all_find() {
-            let even_fold = Fold::new(|v: &Vec<i32>| {
-                v.iter().filter(|x| *x % 2 == 0).cloned().collect()
-            });
+            let even_fold =
+                Fold::new(|v: &Vec<i32>| v.iter().filter(|x| *x % 2 == 0).cloned().collect());
 
             let data = vec![2, 4, 6, 8];
             assert!(even_fold.any(&data, |x| *x > 5));
