@@ -84,6 +84,7 @@ pub mod geometric_optics;
 pub mod iter_ext;
 pub mod logic;
 pub mod optics;
+pub mod profunctor;
 pub mod signal;
 pub mod simd;
 pub mod step;
@@ -123,7 +124,10 @@ pub use collectors::{
 pub use logic::{all_pass, any_pass, both, complement, either, IfElse, Unless, When};
 
 // Re-export optics
-pub use optics::{Fold, Iso, Lens, Optional, Prism, Traversal};
+pub use optics::{ComposedLens, Fold, Iso, Lens, Optional, Prism, Traversal};
+
+// Re-export additional optic types from Karpal
+pub use karpal_optics::{Getter, Review, Setter};
 
 // Re-export geometric optics
 pub use geometric_optics::{

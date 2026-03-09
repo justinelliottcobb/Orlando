@@ -57,13 +57,16 @@
 use std::marker::PhantomData;
 use std::rc::Rc;
 
-// Type aliases to satisfy clippy type_complexity lint
-type Getter<S, A> = Box<dyn Fn(&S) -> A>;
-type Setter<S, A> = Box<dyn Fn(&S, A) -> S>;
-type OptionalGetter<S, A> = Box<dyn Fn(&S) -> Option<A>>;
-type Reviewer<S, A> = Box<dyn Fn(A) -> S>;
-type FoldGetter<S, A> = Box<dyn Fn(&S) -> Vec<A>>;
-type TraversalSetter<S, A> = Box<dyn Fn(&S, &dyn Fn(A) -> A) -> S>;
+use karpal_profunctor::{Choice, Profunctor, Strong, Traversing};
+
+// Type aliases to satisfy clippy type_complexity lint.
+// Using Rc (not Box) so closures can be shared into profunctor transform closures.
+type GetterFn<S, A> = Rc<dyn Fn(&S) -> A>;
+type SetterFn<S, A> = Rc<dyn Fn(&S, A) -> S>;
+type OptionalGetter<S, A> = Rc<dyn Fn(&S) -> Option<A>>;
+type ReviewerFn<S, A> = Rc<dyn Fn(A) -> S>;
+type FoldGetter<S, A> = Rc<dyn Fn(&S) -> Vec<A>>;
+type TraversalSetter<S, A> = Rc<dyn Fn(&S, &dyn Fn(A) -> A) -> S>;
 
 /// A Lens focuses on a part A of a structure S, allowing both reading and updating.
 ///
@@ -72,13 +75,17 @@ type TraversalSetter<S, A> = Box<dyn Fn(&S, &dyn Fn(A) -> A) -> S>;
 /// - `set: (&S, A) -> S` - Update the focused value immutably
 ///
 /// Lenses compose: given `Lens<S, A>` and `Lens<A, B>`, we can create `Lens<S, B>`.
+/// A composed lens from chaining two lenses. In Orlando, this is identical to `Lens`
+/// since both use closure-based storage (unlike Karpal where `Lens` uses fn ptrs).
+pub type ComposedLens<S, A> = Lens<S, A>;
+
 pub struct Lens<S, A>
 where
     S: Clone,
     A: Clone,
 {
-    get: Getter<S, A>,
-    set: Setter<S, A>,
+    get: GetterFn<S, A>,
+    set: SetterFn<S, A>,
     _phantom: PhantomData<(S, A)>,
 }
 
@@ -107,8 +114,8 @@ where
         S2: Fn(&S, A) -> S + 'static,
     {
         Lens {
-            get: Box::new(get_fn),
-            set: Box::new(set_fn),
+            get: Rc::new(get_fn),
+            set: Rc::new(set_fn),
             _phantom: PhantomData,
         }
     }
@@ -181,6 +188,62 @@ where
         self.set(source, updated)
     }
 
+    /// Apply this lens as a profunctor transformer.
+    ///
+    /// A lens is a `Strong` profunctor transformer: given `P<A, A>`, produce `P<S, S>`.
+    /// This is the profunctor optics encoding from Karpal.
+    pub fn transform<P: Strong>(&self, pab: P::P<A, A>) -> P::P<S, S>
+    where
+        S: 'static,
+        A: 'static,
+    {
+        let get = self.get.clone();
+        let set = self.set.clone();
+        P::dimap(
+            move |s: S| {
+                let a = get(&s);
+                (a, s)
+            },
+            move |(a, s): (A, S)| set(&s, a),
+            P::first::<A, A, S>(pab),
+        )
+    }
+
+    /// Compose with another lens, focusing deeper. Alias for `compose()`.
+    pub fn then<B>(self, inner: Lens<A, B>) -> Lens<S, B>
+    where
+        B: Clone + 'static,
+        A: 'static,
+        S: 'static,
+    {
+        self.compose(inner)
+    }
+
+    /// Convert this Lens into a Traversal (a Lens is a single-focus Traversal).
+    pub fn to_traversal(&self) -> Traversal<S, A>
+    where
+        S: 'static,
+        A: 'static,
+    {
+        let get1 = self.get.clone();
+        let get2 = self.get.clone();
+        let set = self.set.clone();
+        Traversal::new(
+            move |s: &S| vec![get1(s)],
+            move |s: &S, f: &dyn Fn(A) -> A| set(s, f(get2(s))),
+        )
+    }
+
+    /// Convert this Lens into a read-only Fold.
+    pub fn to_fold(&self) -> Fold<S, A>
+    where
+        S: 'static,
+        A: 'static,
+    {
+        let get = self.get.clone();
+        Fold::new(move |s: &S| vec![get(s)])
+    }
+
     /// Compose two lenses to focus deeper into nested structures.
     ///
     /// Given `Lens<S, A>` and `Lens<A, B>`, produces `Lens<S, B>`.
@@ -212,24 +275,22 @@ where
         A: 'static,
         S: 'static,
     {
-        // Wrap lenses in Rc to share ownership between closures
-        let self_rc_get = Rc::new(self.get);
-        let self_rc_set = Rc::new(self.set);
-        let other_rc_get = Rc::new(other.get);
-        let other_rc_set = Rc::new(other.set);
+        let self_get = self.get;
+        let self_set = self.set;
+        let other_get = other.get;
+        let other_set = other.set;
 
-        // Clone Rc for the setter closure
-        let self_rc_get_2 = self_rc_get.clone();
+        let self_get_2 = self_get.clone();
 
         Lens::new(
             move |source: &S| {
-                let intermediate = self_rc_get(source);
-                other_rc_get(&intermediate)
+                let intermediate = self_get(source);
+                other_get(&intermediate)
             },
             move |source: &S, value: B| {
-                let intermediate = self_rc_get_2(source);
-                let updated_intermediate = other_rc_set(&intermediate, value);
-                self_rc_set(source, updated_intermediate)
+                let intermediate = self_get_2(source);
+                let updated_intermediate = other_set(&intermediate, value);
+                self_set(source, updated_intermediate)
             },
         )
     }
@@ -244,7 +305,7 @@ where
     A: Clone,
 {
     get: OptionalGetter<S, A>,
-    set: Setter<S, A>,
+    set: SetterFn<S, A>,
     _phantom: PhantomData<(S, A)>,
 }
 
@@ -260,8 +321,8 @@ where
         S2: Fn(&S, A) -> S + 'static,
     {
         Optional {
-            get: Box::new(get_fn),
-            set: Box::new(set_fn),
+            get: Rc::new(get_fn),
+            set: Rc::new(set_fn),
             _phantom: PhantomData,
         }
     }
@@ -295,6 +356,16 @@ where
             }
             None => source.clone(),
         }
+    }
+
+    /// Convert this Optional into a read-only Fold.
+    pub fn to_fold(&self) -> Fold<S, A>
+    where
+        S: 'static,
+        A: 'static,
+    {
+        let get = self.get.clone();
+        Fold::new(move |s: &S| get(s).into_iter().collect())
     }
 }
 
@@ -342,7 +413,7 @@ where
     A: Clone,
 {
     preview_fn: OptionalGetter<S, A>,
-    review_fn: Reviewer<S, A>,
+    review_fn: ReviewerFn<S, A>,
     _phantom: PhantomData<(S, A)>,
 }
 
@@ -358,8 +429,8 @@ where
         R: Fn(A) -> S + 'static,
     {
         Prism {
-            preview_fn: Box::new(preview_fn),
-            review_fn: Box::new(review_fn),
+            preview_fn: Rc::new(preview_fn),
+            review_fn: Rc::new(review_fn),
             _phantom: PhantomData,
         }
     }
@@ -385,6 +456,57 @@ where
             Some(a) => self.review(f(a)),
             None => source.clone(),
         }
+    }
+
+    /// Apply this prism as a profunctor transformer.
+    ///
+    /// A prism is a `Choice` profunctor transformer: given `P<A, A>`, produce `P<S, S>`.
+    pub fn transform<P: Choice>(&self, pab: P::P<A, A>) -> P::P<S, S>
+    where
+        S: 'static,
+        A: 'static,
+    {
+        let preview = self.preview_fn.clone();
+        let review = self.review_fn.clone();
+        P::dimap(
+            move |s: S| match preview(&s) {
+                Some(a) => Ok(a),
+                None => Err(s),
+            },
+            move |r: Result<A, S>| match r {
+                Ok(a) => review(a),
+                Err(s) => s,
+            },
+            P::left::<A, A, S>(pab),
+        )
+    }
+
+    /// Convert this Prism into a Traversal (a Prism is a zero-or-one focus Traversal).
+    pub fn to_traversal(&self) -> Traversal<S, A>
+    where
+        S: 'static,
+        A: 'static,
+    {
+        let preview = self.preview_fn.clone();
+        let preview2 = self.preview_fn.clone();
+        let review = self.review_fn.clone();
+        Traversal::new(
+            move |s: &S| preview(s).into_iter().collect(),
+            move |s: &S, f: &dyn Fn(A) -> A| match preview2(s) {
+                Some(a) => review(f(a)),
+                None => s.clone(),
+            },
+        )
+    }
+
+    /// Convert this Prism into a read-only Fold.
+    pub fn to_fold(&self) -> Fold<S, A>
+    where
+        S: 'static,
+        A: 'static,
+    {
+        let preview = self.preview_fn.clone();
+        Fold::new(move |s: &S| preview(s).into_iter().collect())
     }
 }
 
@@ -422,8 +544,8 @@ where
     S: Clone,
     A: Clone,
 {
-    to_fn: Getter<S, A>,
-    from_fn: Reviewer<S, A>,
+    to_fn: GetterFn<S, A>,
+    from_fn: ReviewerFn<S, A>,
     _phantom: PhantomData<(S, A)>,
 }
 
@@ -439,8 +561,8 @@ where
         F: Fn(A) -> S + 'static,
     {
         Iso {
-            to_fn: Box::new(to_fn),
-            from_fn: Box::new(from_fn),
+            to_fn: Rc::new(to_fn),
+            from_fn: Rc::new(from_fn),
             _phantom: PhantomData,
         }
     }
@@ -464,6 +586,19 @@ where
         self.from(f(a))
     }
 
+    /// Apply this iso as a profunctor transformer.
+    ///
+    /// An iso only requires `Profunctor` (the weakest constraint — just `dimap`).
+    pub fn transform<P: Profunctor>(&self, pab: P::P<A, A>) -> P::P<S, S>
+    where
+        S: 'static,
+        A: 'static,
+    {
+        let to = self.to_fn.clone();
+        let from = self.from_fn.clone();
+        P::dimap(move |s: S| to(&s), move |a: A| from(a), pab)
+    }
+
     /// Reverse the isomorphism: produce `Iso<A, S>`.
     pub fn reverse(self) -> Iso<A, S>
     where
@@ -474,8 +609,8 @@ where
         let original_from = self.from_fn;
 
         Iso {
-            to_fn: Box::new(move |a: &A| (original_from)(a.clone())),
-            from_fn: Box::new(move |s: S| (original_to)(&s)),
+            to_fn: Rc::new(move |a: &A| (original_from)(a.clone())),
+            from_fn: Rc::new(move |s: S| (original_to)(&s)),
             _phantom: PhantomData,
         }
     }
@@ -486,8 +621,8 @@ where
         S: 'static,
         A: 'static,
     {
-        let to_fn = Rc::new(self.to_fn);
-        let from_fn = Rc::new(self.from_fn);
+        let to_fn = self.to_fn;
+        let from_fn = self.from_fn;
 
         Lens::new(move |s: &S| to_fn(s), move |_s: &S, a: A| from_fn(a))
     }
@@ -498,10 +633,34 @@ where
         S: 'static,
         A: 'static,
     {
-        Prism::new(
-            move |s: &S| Some((self.to_fn)(s)),
-            move |a: A| (self.from_fn)(a),
+        let to_fn = self.to_fn;
+        let from_fn = self.from_fn;
+        Prism::new(move |s: &S| Some(to_fn(s)), move |a: A| from_fn(a))
+    }
+
+    /// Convert this Iso into a Traversal (every Iso is a single-focus Traversal).
+    pub fn to_traversal(&self) -> Traversal<S, A>
+    where
+        S: 'static,
+        A: 'static,
+    {
+        let to1 = self.to_fn.clone();
+        let to2 = self.to_fn.clone();
+        let from = self.from_fn.clone();
+        Traversal::new(
+            move |s: &S| vec![to1(s)],
+            move |s: &S, f: &dyn Fn(A) -> A| from(f(to2(s))),
         )
+    }
+
+    /// Convert this Iso into a read-only Fold.
+    pub fn to_fold(&self) -> Fold<S, A>
+    where
+        S: 'static,
+        A: 'static,
+    {
+        let to = self.to_fn.clone();
+        Fold::new(move |s: &S| vec![to(s)])
     }
 }
 
@@ -541,7 +700,7 @@ where
         F: Fn(&S) -> Vec<A> + 'static,
     {
         Fold {
-            fold_fn: Box::new(fold_fn),
+            fold_fn: Rc::new(fold_fn),
             _phantom: PhantomData,
         }
     }
@@ -564,6 +723,41 @@ where
     /// Find the first focused value, if any.
     pub fn first(&self, source: &S) -> Option<A> {
         self.fold_of(source).into_iter().next()
+    }
+
+    /// Apply a function to each focused value and combine the results using `Monoid`.
+    pub fn fold_map<R: karpal_core::Monoid>(&self, source: &S, f: impl Fn(A) -> R) -> R {
+        self.fold_of(source)
+            .into_iter()
+            .map(&f)
+            .fold(R::empty(), R::combine)
+    }
+
+    /// Check if any focused value satisfies the predicate.
+    pub fn any(&self, source: &S, f: impl Fn(&A) -> bool) -> bool {
+        self.fold_of(source).iter().any(f)
+    }
+
+    /// Check if all focused values satisfy the predicate.
+    pub fn all(&self, source: &S, f: impl Fn(&A) -> bool) -> bool {
+        self.fold_of(source).iter().all(f)
+    }
+
+    /// Find the first focused value satisfying a predicate.
+    pub fn find(&self, source: &S, f: impl Fn(&A) -> bool) -> Option<A> {
+        self.fold_of(source).into_iter().find(|a| f(a))
+    }
+
+    /// Compose with another Fold, focusing deeper.
+    pub fn then<B>(self, inner: Fold<A, B>) -> Fold<S, B>
+    where
+        S: 'static,
+        A: 'static,
+        B: Clone + 'static,
+    {
+        let outer = self.fold_fn;
+        let inner = inner.fold_fn;
+        Fold::new(move |s: &S| outer(s).into_iter().flat_map(|a| inner(&a)).collect())
     }
 }
 
@@ -611,8 +805,8 @@ where
         O: Fn(&S, &dyn Fn(A) -> A) -> S + 'static,
     {
         Traversal {
-            get_all_fn: Box::new(get_all_fn),
-            over_all_fn: Box::new(over_all_fn),
+            get_all_fn: Rc::new(get_all_fn),
+            over_all_fn: Rc::new(over_all_fn),
             _phantom: PhantomData,
         }
     }
@@ -639,13 +833,67 @@ where
         (self.over_all_fn)(source, &move |_| v.clone())
     }
 
+    /// Apply this traversal as a profunctor transformer.
+    ///
+    /// A traversal is a `Traversing` profunctor transformer: given `P<A, A>`, produce `P<S, S>`.
+    pub fn transform<P: Traversing>(&self, pab: P::P<A, A>) -> P::P<S, S>
+    where
+        S: 'static,
+        A: 'static,
+    {
+        let get_all = self.get_all_fn.clone();
+        let over_all = self.over_all_fn.clone();
+        P::wander(
+            move |s: &S| get_all(s),
+            move |s: S, f: &dyn Fn(A) -> A| over_all(&s, f),
+            pab,
+        )
+    }
+
     /// Convert this Traversal into a read-only Fold.
     pub fn as_fold(self) -> Fold<S, A>
     where
         S: 'static,
         A: 'static,
     {
-        Fold::new(move |s: &S| (self.get_all_fn)(s))
+        let get_all = self.get_all_fn;
+        Fold::new(move |s: &S| get_all(s))
+    }
+
+    /// Convert this Traversal into a read-only Fold (non-consuming).
+    pub fn to_fold(&self) -> Fold<S, A>
+    where
+        S: 'static,
+        A: 'static,
+    {
+        let get_all = self.get_all_fn.clone();
+        Fold::new(move |s: &S| get_all(s))
+    }
+
+    /// Compose with another Traversal, focusing deeper.
+    pub fn then<B>(self, inner: Traversal<A, B>) -> Traversal<S, B>
+    where
+        S: 'static,
+        A: 'static,
+        B: Clone + 'static,
+    {
+        let outer_get = self.get_all_fn;
+        let outer_over = self.over_all_fn;
+        let inner_get = inner.get_all_fn;
+        let inner_over = inner.over_all_fn;
+
+        Traversal::new(
+            move |s: &S| {
+                outer_get(s)
+                    .into_iter()
+                    .flat_map(|a| inner_get(&a))
+                    .collect()
+            },
+            move |s: &S, f: &dyn Fn(B) -> B| {
+                let inner_ov = inner_over.clone();
+                outer_over(s, &move |a: A| inner_ov(&a, f))
+            },
+        )
     }
 }
 
@@ -1745,6 +1993,387 @@ mod tests {
                 let updated = trav.over_all(&data, |x| x.saturating_mul(2));
                 prop_assert_eq!(trav.get_all(&updated).len(), trav.get_all(&data).len());
             }
+        }
+    }
+
+    // ===== Profunctor transform tests =====
+
+    mod profunctor_tests {
+        use super::*;
+        use karpal_profunctor::FnP;
+
+        fn name_lens() -> Lens<User, String> {
+            Lens::new(
+                |user: &User| user.name.clone(),
+                |user: &User, name: String| User {
+                    name,
+                    age: user.age,
+                    address: user.address.clone(),
+                },
+            )
+        }
+
+        fn age_lens() -> Lens<User, u32> {
+            Lens::new(
+                |user: &User| user.age,
+                |user: &User, age: u32| User {
+                    name: user.name.clone(),
+                    age,
+                    address: user.address.clone(),
+                },
+            )
+        }
+
+        fn test_user() -> User {
+            User {
+                name: "Alice".to_string(),
+                age: 30,
+                address: None,
+            }
+        }
+
+        // -- Lens profunctor transform --
+
+        #[test]
+        fn test_lens_transform_fnp() {
+            let lens = name_lens();
+            let user = test_user();
+
+            // FnP transform: given a function A -> A, produce a function S -> S
+            let identity: Box<dyn Fn(String) -> String> = Box::new(|s| s);
+            let transformed = lens.transform::<FnP>(identity);
+            let result = transformed(user.clone());
+            assert_eq!(result, user);
+        }
+
+        #[test]
+        fn test_lens_transform_fnp_modification() {
+            let lens = name_lens();
+            let user = test_user();
+
+            let uppercase: Box<dyn Fn(String) -> String> = Box::new(|s| s.to_uppercase());
+            let transformed = lens.transform::<FnP>(uppercase);
+            let result = transformed(user);
+            assert_eq!(result.name, "ALICE");
+            assert_eq!(result.age, 30);
+        }
+
+        #[test]
+        fn test_lens_transform_matches_over() {
+            let lens = name_lens();
+            let user = test_user();
+
+            let f = |s: String| s.to_uppercase();
+            let via_over = lens.over(&user, &f);
+
+            let f_boxed: Box<dyn Fn(String) -> String> = Box::new(f);
+            let via_transform = (lens.transform::<FnP>(f_boxed))(user);
+
+            assert_eq!(via_over, via_transform);
+        }
+
+        // -- Prism profunctor transform --
+
+        #[test]
+        fn test_prism_transform_fnp_match() {
+            let prism = circle_prism();
+            let shape = Shape::Circle(5.0);
+
+            let double: Box<dyn Fn(f64) -> f64> = Box::new(|r| r * 2.0);
+            let transformed = prism.transform::<FnP>(double);
+            let result = transformed(shape);
+            assert_eq!(result, Shape::Circle(10.0));
+        }
+
+        #[test]
+        fn test_prism_transform_fnp_no_match() {
+            let prism = circle_prism();
+            let shape = Shape::Rectangle(2.0, 3.0);
+
+            let double: Box<dyn Fn(f64) -> f64> = Box::new(|r| r * 2.0);
+            let transformed = prism.transform::<FnP>(double);
+            let result = transformed(shape.clone());
+            assert_eq!(result, shape);
+        }
+
+        #[test]
+        fn test_prism_transform_matches_over() {
+            let prism = circle_prism();
+            let shape = Shape::Circle(5.0);
+
+            let f = |r: f64| r * 3.0;
+            let via_over = prism.over(&shape, &f);
+
+            let f_boxed: Box<dyn Fn(f64) -> f64> = Box::new(f);
+            let via_transform = (prism.transform::<FnP>(f_boxed))(shape);
+
+            assert_eq!(via_over, via_transform);
+        }
+
+        // -- Iso profunctor transform --
+
+        #[test]
+        fn test_iso_transform_fnp() {
+            let iso = celsius_fahrenheit_iso();
+
+            // Transform in Fahrenheit space: double the value
+            let double: Box<dyn Fn(f64) -> f64> = Box::new(|f| f * 2.0);
+            let transformed = iso.transform::<FnP>(double);
+
+            // 100°C = 212°F, doubled = 424°F, back to °C
+            let result = transformed(100.0);
+            let expected = (424.0 - 32.0) * 5.0 / 9.0;
+            assert!((result - expected).abs() < 1e-10);
+        }
+
+        #[test]
+        fn test_iso_transform_matches_over() {
+            let iso = celsius_fahrenheit_iso();
+            let c = 37.5;
+
+            let f = |x: f64| x + 10.0;
+            let via_over = iso.over(&c, &f);
+
+            let f_boxed: Box<dyn Fn(f64) -> f64> = Box::new(f);
+            let via_transform = (iso.transform::<FnP>(f_boxed))(c);
+
+            assert!((via_over - via_transform).abs() < 1e-10);
+        }
+
+        // -- Traversal profunctor transform --
+
+        #[test]
+        fn test_traversal_transform_fnp() {
+            let trav = vec_traversal();
+            let data = vec![1, 2, 3];
+
+            let double: Box<dyn Fn(i32) -> i32> = Box::new(|x| x * 2);
+            let transformed = trav.transform::<FnP>(double);
+            let result = transformed(data);
+            assert_eq!(result, vec![2, 4, 6]);
+        }
+
+        #[test]
+        fn test_traversal_transform_matches_over_all() {
+            let trav = vec_traversal();
+            let data = vec![10, 20, 30];
+
+            let f = |x: i32| x + 1;
+            let via_over = trav.over_all(&data, &f);
+
+            let f_boxed: Box<dyn Fn(i32) -> i32> = Box::new(f);
+            let via_transform = (trav.transform::<FnP>(f_boxed))(data);
+
+            assert_eq!(via_over, via_transform);
+        }
+
+        // -- Cross-type conversion tests --
+
+        #[test]
+        fn test_lens_to_traversal() {
+            let lens = name_lens();
+            let trav = lens.to_traversal();
+            let user = test_user();
+
+            assert_eq!(trav.get_all(&user), vec!["Alice".to_string()]);
+            let updated = trav.over_all(&user, |s| s.to_uppercase());
+            assert_eq!(updated.name, "ALICE");
+        }
+
+        #[test]
+        fn test_lens_to_fold() {
+            let lens = age_lens();
+            let fold = lens.to_fold();
+            let user = test_user();
+
+            assert_eq!(fold.fold_of(&user), vec![30]);
+            assert_eq!(fold.length(&user), 1);
+        }
+
+        #[test]
+        fn test_prism_to_traversal() {
+            let prism = circle_prism();
+            let trav = prism.to_traversal();
+
+            let circle = Shape::Circle(5.0);
+            assert_eq!(trav.get_all(&circle), vec![5.0]);
+            assert_eq!(trav.over_all(&circle, |r| r * 2.0), Shape::Circle(10.0));
+
+            let rect = Shape::Rectangle(2.0, 3.0);
+            assert!(trav.get_all(&rect).is_empty());
+            assert_eq!(trav.over_all(&rect, |r| r * 2.0), rect);
+        }
+
+        #[test]
+        fn test_prism_to_fold() {
+            let prism = circle_prism();
+            let fold = prism.to_fold();
+
+            assert_eq!(fold.fold_of(&Shape::Circle(5.0)), vec![5.0]);
+            assert!(fold.fold_of(&Shape::Rectangle(2.0, 3.0)).is_empty());
+        }
+
+        #[test]
+        fn test_iso_to_traversal() {
+            let iso = celsius_fahrenheit_iso();
+            let trav = iso.to_traversal();
+            let vals = trav.get_all(&100.0);
+            assert_eq!(vals.len(), 1);
+            assert!((vals[0] - 212.0).abs() < 1e-10);
+        }
+
+        #[test]
+        fn test_iso_to_fold() {
+            let iso = celsius_fahrenheit_iso();
+            let fold = iso.to_fold();
+            let vals = fold.fold_of(&100.0);
+            assert!((vals[0] - 212.0).abs() < 1e-10);
+        }
+
+        #[test]
+        fn test_optional_to_fold() {
+            let opt = Optional::new(
+                |user: &User| user.address.clone(),
+                |user: &User, address: Address| User {
+                    name: user.name.clone(),
+                    age: user.age,
+                    address: Some(address),
+                },
+            );
+
+            let user_with = User {
+                name: "A".into(),
+                age: 1,
+                address: Some(Address {
+                    city: "NYC".into(),
+                    zip: "10001".into(),
+                }),
+            };
+            let user_without = User {
+                name: "B".into(),
+                age: 2,
+                address: None,
+            };
+
+            let fold = opt.to_fold();
+            assert_eq!(fold.length(&user_with), 1);
+            assert_eq!(fold.length(&user_without), 0);
+        }
+
+        // -- Composition tests --
+
+        #[test]
+        fn test_lens_then() {
+            let user = User {
+                name: "Alice".to_string(),
+                age: 30,
+                address: Some(Address {
+                    city: "NYC".to_string(),
+                    zip: "10001".to_string(),
+                }),
+            };
+
+            let via_then = Lens::new(
+                |user: &User| user.address.clone().unwrap(),
+                |user: &User, address: Address| User {
+                    name: user.name.clone(),
+                    age: user.age,
+                    address: Some(address),
+                },
+            )
+            .then(Lens::new(
+                |addr: &Address| addr.city.clone(),
+                |addr: &Address, city: String| Address {
+                    city,
+                    zip: addr.zip.clone(),
+                },
+            ));
+
+            assert_eq!(via_then.get(&user), "NYC");
+            let updated = via_then.set(&user, "Boston".to_string());
+            assert_eq!(updated.address.unwrap().city, "Boston");
+        }
+
+        #[test]
+        fn test_fold_then() {
+            // Fold that gets all members from a team
+            #[derive(Clone, Debug)]
+            struct Team {
+                members: Vec<String>,
+            }
+
+            let members_fold = Fold::new(|team: &Team| team.members.clone());
+            let char_fold =
+                Fold::new(|s: &String| s.chars().map(|c| c.to_string()).collect::<Vec<_>>());
+
+            let composed = members_fold.then(char_fold);
+            let team = Team {
+                members: vec!["ab".to_string(), "cd".to_string()],
+            };
+            assert_eq!(
+                composed.fold_of(&team),
+                vec![
+                    "a".to_string(),
+                    "b".to_string(),
+                    "c".to_string(),
+                    "d".to_string()
+                ]
+            );
+        }
+
+        #[test]
+        fn test_traversal_then() {
+            // Outer: traverse each inner vec
+            let outer = Traversal::new(
+                |v: &Vec<Vec<i32>>| v.clone(),
+                |v: &Vec<Vec<i32>>, f: &dyn Fn(Vec<i32>) -> Vec<i32>| {
+                    v.iter().map(|inner| f(inner.clone())).collect()
+                },
+            );
+
+            // Inner: traverse each element in an inner vec
+            let inner = vec_traversal();
+
+            let composed = outer.then(inner);
+            let data = vec![vec![1, 2], vec![3, 4]];
+
+            assert_eq!(composed.get_all(&data), vec![1, 2, 3, 4]);
+            let doubled = composed.over_all(&data, |x| x * 2);
+            assert_eq!(doubled, vec![vec![2, 4], vec![6, 8]]);
+        }
+
+        // -- Fold aggregation tests --
+
+        #[test]
+        fn test_fold_any_all_find() {
+            let even_fold =
+                Fold::new(|v: &Vec<i32>| v.iter().filter(|x| *x % 2 == 0).cloned().collect());
+
+            let data = vec![2, 4, 6, 8];
+            assert!(even_fold.any(&data, |x| *x > 5));
+            assert!(even_fold.all(&data, |x| *x % 2 == 0));
+            assert_eq!(even_fold.find(&data, |x| *x > 5), Some(6));
+        }
+
+        #[test]
+        fn test_fold_fold_map() {
+            let all_fold = Fold::new(|v: &Vec<i32>| v.clone());
+            let data = vec![1, 2, 3, 4];
+
+            // Sum via fold_map (i32 Monoid is additive)
+            let sum: i32 = all_fold.fold_map(&data, |x| x);
+            assert_eq!(sum, 10);
+        }
+
+        // -- Traversal to_fold (non-consuming) --
+
+        #[test]
+        fn test_traversal_to_fold() {
+            let trav = vec_traversal();
+            let fold = trav.to_fold();
+            assert_eq!(fold.fold_of(&vec![1, 2, 3]), vec![1, 2, 3]);
+            // trav is still usable since to_fold borrows
+            assert_eq!(trav.get_all(&vec![4, 5]), vec![4, 5]);
         }
     }
 }
