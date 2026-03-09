@@ -7,6 +7,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+#### Phase 6b: Advanced Optics
+
+**New Optics Types:**
+- `Prism<S, A>` - Focus on sum types / enum variants with `preview()` and `review()`
+- `Iso<S, A>` - Lossless bidirectional conversions with `to()` and `from()`
+- `Fold<S, A>` - Read-only traversal with aggregation via `fold_of()`
+- `Traversal<S, A>` - Collection-level lens with `get_all()` and `over_all()`
+
+**JavaScript API:**
+- `prism(matchFn, buildFn)` - Create a prism for tagged unions
+- `iso(toFn, fromFn)` - Create an isomorphism
+- `fold(extractFn)` - Create a read-only fold
+- `traversal(getAllFn, overAllFn)` - Create a traversal for collections
+- Property-based law tests for all optics (Prism laws, Iso bijection, Traversal laws)
+
+#### Phase 6g: Geometric Optics
+
+**Multivector coefficient array operations** (operate on plain `&[f64]` / `Float64Array`):
+
+JavaScript API:
+- `bladeGrade(index)` - Compute the grade of a basis blade from its index
+- `bladesAtGradeCount(dimension, grade)` - Count basis blades at a grade
+- `gradeIndices(dimension, grade)` - Get coefficient indices for a grade
+- `gradeExtract(dimension, grade, mv)` - Extract coefficients of a specific grade
+- `gradeProject(dimension, grade, mv)` - Project onto a single grade
+- `gradeProjectMax(dimension, maxGrade, mv)` - Project onto grades up to max
+- `gradeMask(dimension, mv)` - Bitmask of which grades are non-zero
+- `hasGrade(dimension, grade, mv)` - Check for non-zero grade components
+- `isPureGrade(dimension, mv)` - Check if only one grade is non-zero
+- `componentGet(mv, bladeIndex)` / `componentSet(mv, bladeIndex, value)` - Single coefficient access
+- `mvNorm(mv)` / `mvNormSquared(mv)` - Compute multivector magnitude
+- `mvNormalize(mv)` - Normalize to unit length
+- `mvReverse(dimension, mv)` - Grade-dependent sign reversal
+- `gradeInvolution(dimension, mv)` - Grade involution
+
+Rust API:
+- `blade_grade`, `grade_indices`, `grade_extract`, `grade_project`, `grade_project_max`, `grade_mask`, `has_grade`, `is_pure_grade`, `component_get`, `component_set`, `norm`, `norm_squared`, `normalize`, `reverse`, `grade_involution`
+
+#### Phase 5-JS: JavaScript Pipeline Enhancements
+
+- `Pipeline.pluck(key)` - Extract a single property from each object
+- `Pipeline.project(keys)` - Extract multiple properties from each object
+- `Pipeline.compact()` - Remove all falsy values (null, undefined, false, 0, '', NaN)
+- `Pipeline.flatten(depth)` - Flatten nested arrays to a given depth
+- `Pipeline.whereMatches(spec)` - Filter objects matching a spec pattern
+
+#### Phase 6c: Optics-Pipeline Integration
+
+- `Pipeline.viewLens(lens)` - Apply a lens inline to extract focused values
+- `Pipeline.overLens(lens, fn)` - Transform through a lens in the pipeline
+- `Pipeline.filterLens(lens, pred)` - Filter by lens-focused value
+- `Pipeline.setLens(lens, value)` - Set lens-focused value on every element
+
+#### Phase 7: Reactive Streams
+
+**Signal<T> - Time-varying values (Rust API):**
+- `Signal::new(value)` - Create a reactive signal
+- `signal.get()` / `signal.set(value)` / `signal.update(fn)` - Read/write/modify
+- `signal.subscribe(callback)` - React to changes
+- `signal.map(fn)` - Derived signal that auto-updates
+- `signal.combine(other, fn)` - Combine two signals
+- `signal.fold(stream, init, fn)` - Fold a stream into a signal
+
+**Stream<T> - Push-based event streams (Rust API):**
+- `Stream::new()` - Create an event stream
+- `stream.emit(value)` - Push a value
+- `stream.subscribe(callback)` - Listen for events
+- `stream.map(fn)` / `stream.filter(pred)` / `stream.take(n)` - Streaming operations
+- `stream.merge(other)` - Merge two streams
+- `stream.fold(init, fn)` - Fold into a Signal (bridges discrete events to continuous values)
+
+#### Phase 8: Rust API Polish
+
+- `TransduceExt` trait - `.transduce(pipeline)` extension method for any iterator
+- `TransducedIterator` - Lazy iterator adapter for transducer pipelines
+- `PipelineBuilder` - Fluent Rust API: `PipelineBuilder::new().map(f).filter(g).take(n).run(iter)`
+
+#### Testing
+- Total tests: 694 (up from 243 in v0.4.0)
+
 ## [0.4.0] - 2026-01-07
 
 ### Added

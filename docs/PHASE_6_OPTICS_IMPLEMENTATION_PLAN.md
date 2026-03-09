@@ -649,4 +649,14 @@ const orderSummaries = new Pipeline()
 
 ---
 
-**Ready to implement!** This plan provides a clear path to building a uniquely robust optics library that leverages Orlando's strengths (WASM performance, transducer integration) while learning from the best existing libraries.
+## Implementation Status
+
+| Sub-phase | Status | Notes |
+|-----------|--------|-------|
+| **6a: Core Optics** | ✅ COMPLETE | Lens, Optional with property-based law tests |
+| **6b: Advanced Optics** | ✅ COMPLETE | Prism, Iso, Fold, Traversal with law tests |
+| **6b+: Profunctor Encoding** | ⬜ BLOCKED | Awaiting Karpal crate (HKT + Profunctor + Strong + Choice) on crates.io |
+| **6c: Optics-Pipeline Integration** | ✅ COMPLETE | viewLens, overLens, filterLens, setLens pipeline methods |
+| **6g: Geometric Optics** | ✅ COMPLETE | Coefficient array operations for Clifford algebra multivectors |
+
+**Last Updated:** 2026-03-04
