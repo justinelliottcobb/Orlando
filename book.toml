@@ -1,0 +1,15 @@
+[book]
+title = "Orlando"
+description = "High-performance transducers for JavaScript via WebAssembly"
+authors = ["Justin Elliott Cobb"]
+language = "en"
+src = "book/src"
+
+[build]
+build-dir = "book/book"
+
+[output.html]
+additional-css = ["book/theme/custom.css"]
+default-theme = "navy"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/justinelliottcobb/Orlando"

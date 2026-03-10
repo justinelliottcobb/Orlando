@@ -5,3 +5,4 @@ node_modules
 Cargo.lock
 .DS_Store
 tests/property_tests.proptest-regressions
+book/book/

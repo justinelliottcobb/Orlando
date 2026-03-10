@@ -7,7 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-03-09
+
 ### Added
+
+#### Phase 6b+: Profunctor Optics via Karpal
+
+- Profunctor optics encoding via Karpal (karpal-core, karpal-profunctor, karpal-optics 0.2)
+- `transform()` on Lens (Strong), Prism (Choice), Iso (Profunctor), Traversal (Traversing)
+- `then()` composition on Lens, Fold, Traversal
+- Cross-type conversions: `to_traversal()`, `to_fold()` on Lens/Prism/Iso/Optional
+- `fold_map()`, `any()`, `all()`, `find()` on Fold
+- `ComposedLens<S, A>` type alias
+- `src/profunctor.rs` — re-exports of Strong, Choice, Traversing, FnP, ForgetF, TaggedF, Monoid
+- Re-export of Karpal `Getter`, `Setter`, `Review` types
 
 #### Phase 6b: Advanced Optics
 
@@ -87,7 +100,7 @@ Rust API:
 - `PipelineBuilder` - Fluent Rust API: `PipelineBuilder::new().map(f).filter(g).take(n).run(iter)`
 
 #### Testing
-- Total tests: 694 (up from 243 in v0.4.0)
+- Total tests: 717 (up from 243 in v0.4.0)
 
 ## [0.4.0] - 2026-01-07
 
@@ -225,7 +238,8 @@ Rust API:
 - Code coverage reporting
 - WASM test suite
 
-[Unreleased]: https://github.com/justinelliottcobb/Orlando/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/justinelliottcobb/Orlando/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/justinelliottcobb/Orlando/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/justinelliottcobb/Orlando/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/justinelliottcobb/Orlando/compare/v0.1.0...v0.3.0
 [0.1.0]: https://github.com/justinelliottcobb/Orlando/releases/tag/v0.1.0
