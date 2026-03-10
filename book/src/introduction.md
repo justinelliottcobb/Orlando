@@ -48,6 +48,7 @@ const result = pipeline.toArray(data);
 - **Profunctor encoding** - Principled optics composition via [Karpal](https://crates.io/crates/karpal-optics)
 - **Reactive primitives** - Signal and Stream types (Rust API)
 - **Geometric optics** - Multivector grade projection and extraction
+- **Dual platform** - Available on [crates.io](https://crates.io/crates/orlando-transducers) for Rust and [npm](https://www.npmjs.com/package/orlando-transducers) for JavaScript/TypeScript
 - **Tiny** - <50KB compressed WASM bundle
 
 ## Performance

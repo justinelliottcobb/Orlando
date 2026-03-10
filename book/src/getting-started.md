@@ -2,12 +2,27 @@
 
 ## Installation
 
+### JavaScript / TypeScript (via npm)
+
 ```bash
 npm install orlando-transducers
 # or
 yarn add orlando-transducers
 # or
 pnpm add orlando-transducers
+```
+
+### Rust (via crates.io)
+
+```bash
+cargo add orlando-transducers
+```
+
+Or add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+orlando-transducers = "0.5.1"
 ```
 
 ### Using from CDN
@@ -151,7 +166,7 @@ Orlando is also a first-class Rust library:
 
 ```toml
 [dependencies]
-orlando-transducers = "0.5.0"
+orlando-transducers = "0.5.1"
 ```
 
 ```rust
