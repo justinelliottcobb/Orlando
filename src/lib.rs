@@ -80,15 +80,23 @@
 //! Benchmarks show 3-5x performance improvement over pure JavaScript array chaining.
 
 pub mod collectors;
+pub mod geometric_optics;
+pub mod iter_ext;
 pub mod logic;
 pub mod optics;
+pub mod profunctor;
+pub mod signal;
 pub mod simd;
 pub mod step;
+pub mod stream;
 pub mod transducer;
 pub mod transforms;
 
 #[cfg(target_arch = "wasm32")]
 pub mod pipeline;
+
+#[cfg(target_arch = "wasm32")]
+pub mod geometric_optics_wasm;
 
 #[cfg(target_arch = "wasm32")]
 pub mod optics_wasm;
@@ -116,13 +124,37 @@ pub use collectors::{
 pub use logic::{all_pass, any_pass, both, complement, either, IfElse, Unless, When};
 
 // Re-export optics
-pub use optics::{Lens, Optional};
+pub use optics::{ComposedLens, Fold, Iso, Lens, Optional, Prism, Traversal};
+
+// Re-export additional optic types from Karpal
+pub use karpal_optics::{Getter, Review, Setter};
+
+// Re-export geometric optics
+pub use geometric_optics::{
+    blade_grade, blades_at_grade_count, component_get, component_set, grade_extract, grade_indices,
+    grade_involution, grade_mask, grade_project, grade_project_max, has_grade, is_pure_grade, norm,
+    norm_squared, normalize,
+};
 
 #[cfg(target_arch = "wasm32")]
 pub use pipeline::Pipeline;
 
 #[cfg(target_arch = "wasm32")]
-pub use optics_wasm::{lens, lens_path, optional, JsLens, JsOptional};
+pub use geometric_optics_wasm::{
+    blade_grade as wasm_blade_grade, blades_at_grade_count as wasm_blades_at_grade_count,
+    component_get as wasm_component_get, component_set as wasm_component_set,
+    grade_extract as wasm_grade_extract, grade_indices as wasm_grade_indices,
+    grade_involution as wasm_grade_involution, grade_mask as wasm_grade_mask,
+    grade_project as wasm_grade_project, grade_project_max as wasm_grade_project_max,
+    has_grade as wasm_has_grade, is_pure_grade as wasm_is_pure_grade, mv_norm, mv_norm_squared,
+    mv_normalize, mv_reverse,
+};
+
+#[cfg(target_arch = "wasm32")]
+pub use optics_wasm::{
+    fold, iso, lens, lens_path, optional, prism, traversal, JsFold, JsIso, JsLens, JsOptional,
+    JsPrism, JsTraversal,
+};
 
 // WASM initialization
 #[cfg(target_arch = "wasm32")]

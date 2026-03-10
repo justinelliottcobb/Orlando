@@ -822,3 +822,517 @@ fn test_wasm_lens_law_put_put() {
     assert_eq!(name1.as_string(), name2.as_string());
     assert_eq!(name1.as_string(), Some("Charlie".to_string()));
 }
+
+// ============================================================================
+// Phase 5-JS: JavaScript-specific Pipeline Enhancement Tests
+// ============================================================================
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_project() {
+    use js_sys::{Array, Object, Reflect};
+    use orlando_transducers::Pipeline;
+    use wasm_bindgen::JsValue;
+
+    let pipeline = Pipeline::new();
+    let keys = Array::new();
+    keys.push(&"id".into());
+    keys.push(&"name".into());
+    let pipeline = pipeline.project(&keys.into());
+
+    let source = Array::new();
+
+    let obj1 = Object::new();
+    Reflect::set(&obj1, &"id".into(), &1.into()).unwrap();
+    Reflect::set(&obj1, &"name".into(), &"Alice".into()).unwrap();
+    Reflect::set(&obj1, &"age".into(), &30.into()).unwrap();
+    source.push(&obj1);
+
+    let obj2 = Object::new();
+    Reflect::set(&obj2, &"id".into(), &2.into()).unwrap();
+    Reflect::set(&obj2, &"name".into(), &"Bob".into()).unwrap();
+    Reflect::set(&obj2, &"age".into(), &25.into()).unwrap();
+    source.push(&obj2);
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 2);
+
+    // Check that projected objects have only id and name
+    let r1 = result.get(0);
+    assert_eq!(Reflect::get(&r1, &"id".into()).unwrap().as_f64(), Some(1.0));
+    assert_eq!(
+        Reflect::get(&r1, &"name".into()).unwrap().as_string(),
+        Some("Alice".to_string())
+    );
+    // age should be undefined (not present in projected object)
+    assert!(Reflect::get(&r1, &"age".into()).unwrap().is_undefined());
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_project_missing_keys() {
+    use js_sys::{Array, Object, Reflect};
+    use orlando_transducers::Pipeline;
+    use wasm_bindgen::JsValue;
+
+    let pipeline = Pipeline::new();
+    let keys = Array::new();
+    keys.push(&"name".into());
+    keys.push(&"email".into());
+    let pipeline = pipeline.project(&keys.into());
+
+    let source = Array::new();
+
+    let obj = Object::new();
+    Reflect::set(&obj, &"name".into(), &"Alice".into()).unwrap();
+    // email not present
+    source.push(&obj);
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 1);
+
+    let r = result.get(0);
+    assert_eq!(
+        Reflect::get(&r, &"name".into()).unwrap().as_string(),
+        Some("Alice".to_string())
+    );
+    assert!(Reflect::get(&r, &"email".into()).unwrap().is_undefined());
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_compact() {
+    use js_sys::Array;
+    use orlando_transducers::Pipeline;
+    use wasm_bindgen::JsValue;
+
+    let pipeline = Pipeline::new().compact();
+
+    let source = Array::new();
+    source.push(&1.into());
+    source.push(&JsValue::NULL);
+    source.push(&"hello".into());
+    source.push(&JsValue::UNDEFINED);
+    source.push(&0.into());
+    source.push(&false.into());
+    source.push(&JsValue::from_str(""));
+    source.push(&42.into());
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 3);
+    assert_eq!(result.get(0).as_f64(), Some(1.0));
+    assert_eq!(result.get(1).as_string(), Some("hello".to_string()));
+    assert_eq!(result.get(2).as_f64(), Some(42.0));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_compact_preserves_objects() {
+    use js_sys::{Array, Object, Reflect};
+    use orlando_transducers::Pipeline;
+    use wasm_bindgen::JsValue;
+
+    let pipeline = Pipeline::new().compact();
+
+    let source = Array::new();
+    let obj = Object::new();
+    Reflect::set(&obj, &"x".into(), &1.into()).unwrap();
+    source.push(&obj);
+    source.push(&JsValue::NULL);
+    source.push(&"text".into());
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 2);
+    // First element should be the object
+    assert_eq!(
+        Reflect::get(&result.get(0), &"x".into()).unwrap().as_f64(),
+        Some(1.0)
+    );
+    assert_eq!(result.get(1).as_string(), Some("text".to_string()));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_flatten_depth_1() {
+    use js_sys::Array;
+    use orlando_transducers::Pipeline;
+
+    let pipeline = Pipeline::new().flatten(1);
+
+    let source = Array::new();
+
+    let inner1 = Array::new();
+    inner1.push(&1.into());
+    inner1.push(&2.into());
+    source.push(&inner1);
+
+    let inner2 = Array::new();
+    inner2.push(&3.into());
+    inner2.push(&4.into());
+    source.push(&inner2);
+
+    source.push(&5.into()); // non-array passes through
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 5);
+    assert_eq!(result.get(0).as_f64(), Some(1.0));
+    assert_eq!(result.get(1).as_f64(), Some(2.0));
+    assert_eq!(result.get(2).as_f64(), Some(3.0));
+    assert_eq!(result.get(3).as_f64(), Some(4.0));
+    assert_eq!(result.get(4).as_f64(), Some(5.0));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_flatten_depth_2() {
+    use js_sys::Array;
+    use orlando_transducers::Pipeline;
+
+    let pipeline = Pipeline::new().flatten(2);
+
+    let source = Array::new();
+
+    let inner1 = Array::new();
+    inner1.push(&1.into());
+    let nested = Array::new();
+    nested.push(&2.into());
+    nested.push(&3.into());
+    inner1.push(&nested);
+    source.push(&inner1);
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 3);
+    assert_eq!(result.get(0).as_f64(), Some(1.0));
+    assert_eq!(result.get(1).as_f64(), Some(2.0));
+    assert_eq!(result.get(2).as_f64(), Some(3.0));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_flatten_depth_1_preserves_nesting() {
+    use js_sys::Array;
+    use orlando_transducers::Pipeline;
+    use wasm_bindgen::JsCast;
+
+    let pipeline = Pipeline::new().flatten(1);
+
+    let source = Array::new();
+
+    let inner = Array::new();
+    let nested = Array::new();
+    nested.push(&1.into());
+    nested.push(&2.into());
+    inner.push(&nested);
+    inner.push(&3.into());
+    source.push(&inner);
+
+    let result = pipeline.to_array(&source);
+    // flatten(1) should expand [[[1,2], 3]] to [[1,2], 3]
+    assert_eq!(result.length(), 2);
+    // First element should still be an array [1, 2]
+    let first = result.get(0);
+    let first_array: Array = first.dyn_into().unwrap();
+    assert_eq!(first_array.length(), 2);
+    assert_eq!(first_array.get(0).as_f64(), Some(1.0));
+    assert_eq!(result.get(1).as_f64(), Some(3.0));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_where_matches() {
+    use js_sys::{Array, Object, Reflect};
+    use orlando_transducers::Pipeline;
+    use wasm_bindgen::JsValue;
+
+    let spec = Object::new();
+    Reflect::set(&spec, &"active".into(), &true.into()).unwrap();
+
+    let pipeline = Pipeline::new().where_matches(&spec.into());
+
+    let source = Array::new();
+
+    let obj1 = Object::new();
+    Reflect::set(&obj1, &"name".into(), &"Alice".into()).unwrap();
+    Reflect::set(&obj1, &"active".into(), &true.into()).unwrap();
+    source.push(&obj1);
+
+    let obj2 = Object::new();
+    Reflect::set(&obj2, &"name".into(), &"Bob".into()).unwrap();
+    Reflect::set(&obj2, &"active".into(), &false.into()).unwrap();
+    source.push(&obj2);
+
+    let obj3 = Object::new();
+    Reflect::set(&obj3, &"name".into(), &"Charlie".into()).unwrap();
+    Reflect::set(&obj3, &"active".into(), &true.into()).unwrap();
+    source.push(&obj3);
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 2);
+    assert_eq!(
+        Reflect::get(&result.get(0), &"name".into())
+            .unwrap()
+            .as_string(),
+        Some("Alice".to_string())
+    );
+    assert_eq!(
+        Reflect::get(&result.get(1), &"name".into())
+            .unwrap()
+            .as_string(),
+        Some("Charlie".to_string())
+    );
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_where_matches_multiple_keys() {
+    use js_sys::{Array, Object, Reflect};
+    use orlando_transducers::Pipeline;
+    use wasm_bindgen::JsValue;
+
+    let spec = Object::new();
+    Reflect::set(&spec, &"active".into(), &true.into()).unwrap();
+    Reflect::set(&spec, &"role".into(), &"admin".into()).unwrap();
+
+    let pipeline = Pipeline::new().where_matches(&spec.into());
+
+    let source = Array::new();
+
+    let obj1 = Object::new();
+    Reflect::set(&obj1, &"name".into(), &"Alice".into()).unwrap();
+    Reflect::set(&obj1, &"active".into(), &true.into()).unwrap();
+    Reflect::set(&obj1, &"role".into(), &"admin".into()).unwrap();
+    source.push(&obj1);
+
+    let obj2 = Object::new();
+    Reflect::set(&obj2, &"name".into(), &"Bob".into()).unwrap();
+    Reflect::set(&obj2, &"active".into(), &true.into()).unwrap();
+    Reflect::set(&obj2, &"role".into(), &"user".into()).unwrap();
+    source.push(&obj2);
+
+    let obj3 = Object::new();
+    Reflect::set(&obj3, &"name".into(), &"Charlie".into()).unwrap();
+    Reflect::set(&obj3, &"active".into(), &false.into()).unwrap();
+    Reflect::set(&obj3, &"role".into(), &"admin".into()).unwrap();
+    source.push(&obj3);
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 1); // Only Alice matches both criteria
+    assert_eq!(
+        Reflect::get(&result.get(0), &"name".into())
+            .unwrap()
+            .as_string(),
+        Some("Alice".to_string())
+    );
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_where_matches_numeric() {
+    use js_sys::{Array, Object, Reflect};
+    use orlando_transducers::Pipeline;
+    use wasm_bindgen::JsValue;
+
+    let spec = Object::new();
+    Reflect::set(&spec, &"score".into(), &100.into()).unwrap();
+
+    let pipeline = Pipeline::new().where_matches(&spec.into());
+
+    let source = Array::new();
+
+    let obj1 = Object::new();
+    Reflect::set(&obj1, &"name".into(), &"Alice".into()).unwrap();
+    Reflect::set(&obj1, &"score".into(), &100.into()).unwrap();
+    source.push(&obj1);
+
+    let obj2 = Object::new();
+    Reflect::set(&obj2, &"name".into(), &"Bob".into()).unwrap();
+    Reflect::set(&obj2, &"score".into(), &80.into()).unwrap();
+    source.push(&obj2);
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 1);
+    assert_eq!(
+        Reflect::get(&result.get(0), &"name".into())
+            .unwrap()
+            .as_string(),
+        Some("Alice".to_string())
+    );
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_flatten_with_take() {
+    use js_sys::Array;
+    use orlando_transducers::Pipeline;
+
+    let pipeline = Pipeline::new().flatten(1).take(3);
+
+    let source = Array::new();
+
+    let inner1 = Array::new();
+    inner1.push(&1.into());
+    inner1.push(&2.into());
+    source.push(&inner1);
+
+    let inner2 = Array::new();
+    inner2.push(&3.into());
+    inner2.push(&4.into());
+    source.push(&inner2);
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 3);
+    assert_eq!(result.get(0).as_f64(), Some(1.0));
+    assert_eq!(result.get(1).as_f64(), Some(2.0));
+    assert_eq!(result.get(2).as_f64(), Some(3.0));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_project_then_where_matches() {
+    use js_sys::{Array, Object, Reflect};
+    use orlando_transducers::Pipeline;
+    use wasm_bindgen::JsValue;
+
+    // project to just name and active, then filter by active
+    let keys = Array::new();
+    keys.push(&"name".into());
+    keys.push(&"active".into());
+
+    let spec = Object::new();
+    Reflect::set(&spec, &"active".into(), &true.into()).unwrap();
+
+    let pipeline = Pipeline::new()
+        .project(&keys.into())
+        .where_matches(&spec.into());
+
+    let source = Array::new();
+
+    let obj1 = Object::new();
+    Reflect::set(&obj1, &"name".into(), &"Alice".into()).unwrap();
+    Reflect::set(&obj1, &"active".into(), &true.into()).unwrap();
+    Reflect::set(&obj1, &"age".into(), &30.into()).unwrap();
+    source.push(&obj1);
+
+    let obj2 = Object::new();
+    Reflect::set(&obj2, &"name".into(), &"Bob".into()).unwrap();
+    Reflect::set(&obj2, &"active".into(), &false.into()).unwrap();
+    Reflect::set(&obj2, &"age".into(), &25.into()).unwrap();
+    source.push(&obj2);
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 1);
+
+    let r = result.get(0);
+    assert_eq!(
+        Reflect::get(&r, &"name".into()).unwrap().as_string(),
+        Some("Alice".to_string())
+    );
+    // age should not be present since we projected it out
+    assert!(Reflect::get(&r, &"age".into()).unwrap().is_undefined());
+}
+
+// ===== Phase 6c: Optics-Pipeline Integration Tests =====
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_view_lens() {
+    let name_lens = orlando_transducers::lens("name");
+    let pipeline = Pipeline::new().view_lens(&name_lens);
+
+    let source = js_sys::Array::new();
+    let obj1 = js_sys::Object::new();
+    js_sys::Reflect::set(&obj1, &"name".into(), &"Alice".into()).unwrap();
+    let obj2 = js_sys::Object::new();
+    js_sys::Reflect::set(&obj2, &"name".into(), &"Bob".into()).unwrap();
+    source.push(&obj1);
+    source.push(&obj2);
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 2);
+    assert_eq!(result.get(0).as_string(), Some("Alice".to_string()));
+    assert_eq!(result.get(1).as_string(), Some("Bob".to_string()));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_over_lens() {
+    let price_lens = orlando_transducers::lens("price");
+
+    // Create a JS function that multiplies by 0.9
+    let discount_fn = js_sys::Function::new_with_args("p", "return p * 0.9");
+    let pipeline = Pipeline::new().over_lens(&price_lens, &discount_fn);
+
+    let source = js_sys::Array::new();
+    let item = js_sys::Object::new();
+    js_sys::Reflect::set(&item, &"name".into(), &"Widget".into()).unwrap();
+    js_sys::Reflect::set(
+        &item,
+        &"price".into(),
+        &wasm_bindgen::JsValue::from_f64(100.0),
+    )
+    .unwrap();
+    source.push(&item);
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 1);
+    let result_obj = result.get(0);
+    let price = js_sys::Reflect::get(&result_obj, &"price".into()).unwrap();
+    assert!((price.as_f64().unwrap() - 90.0).abs() < 1e-10);
+    // Original name preserved
+    let name = js_sys::Reflect::get(&result_obj, &"name".into()).unwrap();
+    assert_eq!(name.as_string(), Some("Widget".to_string()));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_filter_lens() {
+    let age_lens = orlando_transducers::lens("age");
+    let adult_fn = js_sys::Function::new_with_args("a", "return a >= 18");
+    let pipeline = Pipeline::new().filter_lens(&age_lens, &adult_fn);
+
+    let source = js_sys::Array::new();
+    for (name, age) in &[("Alice", 25.0), ("Bob", 17.0), ("Charlie", 30.0)] {
+        let obj = js_sys::Object::new();
+        js_sys::Reflect::set(&obj, &"name".into(), &(*name).into()).unwrap();
+        js_sys::Reflect::set(&obj, &"age".into(), &wasm_bindgen::JsValue::from_f64(*age)).unwrap();
+        source.push(&obj);
+    }
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 2);
+
+    let name0 = js_sys::Reflect::get(&result.get(0), &"name".into()).unwrap();
+    let name1 = js_sys::Reflect::get(&result.get(1), &"name".into()).unwrap();
+    assert_eq!(name0.as_string(), Some("Alice".to_string()));
+    assert_eq!(name1.as_string(), Some("Charlie".to_string()));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_set_lens() {
+    let status_lens = orlando_transducers::lens("status");
+    let pipeline = Pipeline::new().set_lens(&status_lens, "published".into());
+
+    let source = js_sys::Array::new();
+    let item1 = js_sys::Object::new();
+    js_sys::Reflect::set(&item1, &"id".into(), &wasm_bindgen::JsValue::from_f64(1.0)).unwrap();
+    js_sys::Reflect::set(&item1, &"status".into(), &"draft".into()).unwrap();
+    let item2 = js_sys::Object::new();
+    js_sys::Reflect::set(&item2, &"id".into(), &wasm_bindgen::JsValue::from_f64(2.0)).unwrap();
+    js_sys::Reflect::set(&item2, &"status".into(), &"draft".into()).unwrap();
+    source.push(&item1);
+    source.push(&item2);
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 2);
+    let status0 = js_sys::Reflect::get(&result.get(0), &"status".into()).unwrap();
+    let status1 = js_sys::Reflect::get(&result.get(1), &"status".into()).unwrap();
+    assert_eq!(status0.as_string(), Some("published".to_string()));
+    assert_eq!(status1.as_string(), Some("published".to_string()));
+}
+
+#[wasm_bindgen_test]
+fn test_wasm_pipeline_lens_composition() {
+    // Chain: viewLens to extract, then filter, then take
+    let name_lens = orlando_transducers::lens("name");
+    let pipeline = Pipeline::new()
+        .view_lens(&name_lens)
+        .filter(&js_sys::Function::new_with_args("s", "return s.length > 3"))
+        .take(2);
+
+    let source = js_sys::Array::new();
+    for name in &["Al", "Alice", "Bob", "Charlie", "Ed"] {
+        let obj = js_sys::Object::new();
+        js_sys::Reflect::set(&obj, &"name".into(), &(*name).into()).unwrap();
+        source.push(&obj);
+    }
+
+    let result = pipeline.to_array(&source);
+    assert_eq!(result.length(), 2);
+    assert_eq!(result.get(0).as_string(), Some("Alice".to_string()));
+    assert_eq!(result.get(1).as_string(), Some("Charlie".to_string()));
+}

@@ -688,3 +688,283 @@ fn test_complex_logic_pipeline() {
     // Filter abs > 5: [-60, -12, 10, 13, 60]
     assert_eq!(result, vec![-60, -12, 10, 13, 60]);
 }
+
+// ========================================
+// Optics Integration Tests
+// ========================================
+
+#[test]
+fn test_prism_with_enum_pipeline() {
+    use orlando_transducers::optics::Prism;
+
+    #[derive(Clone, Debug, PartialEq)]
+    enum Value {
+        Int(i32),
+        Str(String),
+    }
+
+    let int_prism = Prism::new(
+        |v: &Value| match v {
+            Value::Int(n) => Some(*n),
+            _ => None,
+        },
+        |n: i32| Value::Int(n),
+    );
+
+    // Use prism to extract and transform
+    let values = [Value::Int(1), Value::Str("hi".into()), Value::Int(3)];
+    let doubled: Vec<Value> = values
+        .iter()
+        .map(|v| int_prism.over(v, |n| n * 2))
+        .collect();
+
+    assert_eq!(
+        doubled,
+        vec![Value::Int(2), Value::Str("hi".into()), Value::Int(6)]
+    );
+}
+
+#[test]
+fn test_iso_bidirectional() {
+    use orlando_transducers::optics::Iso;
+
+    // Radians ↔ Degrees
+    let rad_deg = Iso::new(
+        |r: &f64| r * 180.0 / std::f64::consts::PI,
+        |d: f64| d * std::f64::consts::PI / 180.0,
+    );
+
+    let pi = std::f64::consts::PI;
+    let degrees = rad_deg.to(&pi);
+    assert!((degrees - 180.0).abs() < 1e-10);
+
+    let back = rad_deg.from(degrees);
+    assert!((back - pi).abs() < 1e-10);
+
+    // Reverse
+    let deg_rad = rad_deg.reverse();
+    let radians = deg_rad.to(&180.0);
+    assert!((radians - pi).abs() < 1e-10);
+}
+
+#[test]
+fn test_fold_aggregate() {
+    use orlando_transducers::optics::Fold;
+
+    #[derive(Clone, Debug)]
+    struct Order {
+        items: Vec<f64>,
+    }
+
+    let prices_fold = Fold::new(|order: &Order| order.items.clone());
+
+    let order = Order {
+        items: vec![9.99, 24.50, 3.75],
+    };
+
+    let prices = prices_fold.fold_of(&order);
+    let total: f64 = prices.iter().sum();
+    assert!((total - 38.24).abs() < 1e-10);
+    assert_eq!(prices_fold.length(&order), 3);
+}
+
+#[test]
+fn test_traversal_with_nested_structs() {
+    use orlando_transducers::optics::Traversal;
+
+    #[derive(Clone, Debug, PartialEq)]
+    struct Config {
+        values: Vec<i32>,
+        name: String,
+    }
+
+    let values_traversal = Traversal::new(
+        |cfg: &Config| cfg.values.clone(),
+        |cfg: &Config, f: &dyn Fn(i32) -> i32| Config {
+            values: cfg.values.iter().map(|x| f(*x)).collect(),
+            name: cfg.name.clone(),
+        },
+    );
+
+    let cfg = Config {
+        values: vec![1, 2, 3],
+        name: "test".into(),
+    };
+
+    // Transform all values
+    let updated = values_traversal.over_all(&cfg, |x| x * 10);
+    assert_eq!(updated.values, vec![10, 20, 30]);
+    assert_eq!(updated.name, "test");
+
+    // Set all values
+    let zeroed = values_traversal.set_all(&cfg, 0);
+    assert_eq!(zeroed.values, vec![0, 0, 0]);
+
+    // Convert to fold
+    let fold = values_traversal.as_fold();
+    assert_eq!(fold.fold_of(&cfg), vec![1, 2, 3]);
+}
+
+#[test]
+fn test_iso_as_lens_composition() {
+    use orlando_transducers::optics::{Iso, Lens};
+
+    #[derive(Clone, Debug, PartialEq)]
+    struct Wrapper {
+        inner: f64,
+    }
+
+    let inner_lens = Lens::new(
+        |w: &Wrapper| w.inner,
+        |_w: &Wrapper, v: f64| Wrapper { inner: v },
+    );
+
+    // Celsius value inside a wrapper
+    let celsius_fahrenheit = Iso::new(
+        |c: &f64| *c * 9.0 / 5.0 + 32.0,
+        |f: f64| (f - 32.0) * 5.0 / 9.0,
+    );
+
+    // Compose: wrapper → inner (lens) → fahrenheit (iso as lens)
+    let wrapper_to_f = inner_lens.compose(celsius_fahrenheit.as_lens());
+
+    let w = Wrapper { inner: 100.0 };
+    let f = wrapper_to_f.get(&w);
+    assert!((f - 212.0).abs() < 1e-10);
+
+    let updated = wrapper_to_f.set(&w, 32.0);
+    assert!((updated.inner - 0.0).abs() < 1e-10);
+}
+
+// ===== Geometric Optics Integration Tests =====
+
+#[test]
+fn test_geometric_optics_with_pipeline() {
+    use orlando_transducers::geometric_optics;
+
+    // Pipeline: stream of 3D multivectors → extract bivector part → filter by norm → take first 2
+    let multivectors = vec![
+        vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], // scalar only
+        vec![0.0, 0.0, 0.0, 5.0, 0.0, 5.0, 5.0, 0.0], // bivector norm = sqrt(75)
+        vec![0.0, 0.0, 0.0, 0.1, 0.0, 0.0, 0.0, 0.0], // small bivector
+        vec![0.0, 0.0, 0.0, 3.0, 0.0, 4.0, 0.0, 0.0], // bivector norm = 5
+    ];
+
+    // Extract bivector norms, filter by threshold, take 2
+    let pipeline = Map::new(move |mv: Vec<f64>| {
+        let bv = geometric_optics::grade_extract(3, 2, &mv);
+        geometric_optics::norm(&bv)
+    })
+    .compose(Filter::new(|n: &f64| *n > 1.0))
+    .compose(Take::new(2));
+
+    let result = to_vec(&pipeline, multivectors);
+    assert_eq!(result.len(), 2);
+    assert!((result[0] - 75.0f64.sqrt()).abs() < 1e-10);
+    assert!((result[1] - 5.0).abs() < 1e-10);
+}
+
+#[test]
+fn test_geometric_optics_grade_project_in_pipeline() {
+    use orlando_transducers::geometric_optics;
+
+    // Pipeline: project each multivector to its vector part
+    let multivectors = vec![
+        vec![10.0, 1.0, 2.0, 99.0, 3.0, 99.0, 99.0, 99.0],
+        vec![20.0, 4.0, 5.0, 88.0, 6.0, 88.0, 88.0, 88.0],
+    ];
+
+    let pipeline = Map::new(move |mv: Vec<f64>| geometric_optics::grade_project(3, 1, &mv));
+
+    let result = to_vec(&pipeline, multivectors);
+    assert_eq!(result[0], vec![0.0, 1.0, 2.0, 0.0, 3.0, 0.0, 0.0, 0.0]);
+    assert_eq!(result[1], vec![0.0, 4.0, 5.0, 0.0, 6.0, 0.0, 0.0, 0.0]);
+}
+
+#[test]
+fn test_geometric_optics_pure_grade_filter() {
+    use orlando_transducers::geometric_optics;
+
+    // Filter to only pure k-vectors (single grade)
+    let multivectors = vec![
+        vec![0.0, 1.0, 2.0, 0.0, 3.0, 0.0, 0.0, 0.0], // pure vector
+        vec![1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], // mixed (scalar + vector)
+        vec![0.0, 0.0, 0.0, 1.0, 0.0, 2.0, 3.0, 0.0], // pure bivector
+    ];
+
+    let pipeline = Filter::new(move |mv: &Vec<f64>| geometric_optics::is_pure_grade(3, mv));
+
+    let result = to_vec(&pipeline, multivectors);
+    assert_eq!(result.len(), 2); // only the pure vector and pure bivector
+}
+
+// ===== Phase 7: Reactive Streams Integration Tests =====
+
+#[test]
+fn test_signal_with_transducer() {
+    use orlando_transducers::signal::Signal;
+
+    // Signal + map chain
+    let temperature_c = Signal::new(0.0);
+    let temperature_f = temperature_c.map(|c| c * 9.0 / 5.0 + 32.0);
+
+    assert!((*temperature_f.get() - 32.0f64).abs() < 1e-10);
+    temperature_c.set(100.0);
+    assert!((*temperature_f.get() - 212.0f64).abs() < 1e-10);
+}
+
+#[test]
+fn test_stream_fold_with_pipeline_pattern() {
+    use orlando_transducers::stream::Stream;
+
+    // Stream fold pattern: accumulate click events into a count
+    let events = Stream::new();
+    let count = events.fold(0i32, |acc, n: &i32| acc + n);
+
+    events.emit(1);
+    events.emit(5);
+    events.emit(3);
+    assert_eq!(*count.get(), 9);
+}
+
+#[test]
+fn test_stream_map_filter_take_pipeline() {
+    use orlando_transducers::stream::Stream;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    // Stream with map → filter → take: same semantics as pull-based pipeline
+    let source = Stream::new();
+    let result = source.map(|x: &i32| x * 2).filter(|x: &i32| *x > 5).take(3);
+
+    let output = Rc::new(RefCell::new(Vec::new()));
+    let output_clone = output.clone();
+    let _sub = result.subscribe(move |v: &i32| {
+        output_clone.borrow_mut().push(*v);
+    });
+
+    // Emit: 1→2, 2→4, 3→6, 4→8, 5→10, 6→12, 7→14
+    // Filter >5: 6, 8, 10, 12, 14
+    // Take 3: 6, 8, 10
+    for i in 1..=7 {
+        source.emit(i);
+    }
+    assert_eq!(*output.borrow(), vec![6, 8, 10]);
+}
+
+#[test]
+fn test_signal_combine_multiple() {
+    use orlando_transducers::signal::Signal;
+
+    let x = Signal::new(1.0);
+    let y = Signal::new(2.0);
+    let z = Signal::new(3.0);
+
+    // Combine x and y, then combine with z
+    let xy = x.combine(&y, |a, b| a + b);
+    let xyz = xy.combine(&z, |ab, c| ab * c);
+
+    assert!((*xyz.get() - 9.0f64).abs() < 1e-10); // (1+2)*3
+    x.set(4.0);
+    assert!((*xyz.get() - 18.0f64).abs() < 1e-10); // (4+2)*3
+}
